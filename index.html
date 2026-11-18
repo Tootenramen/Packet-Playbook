@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Packet Playbook - read a packet capture as a football play</title>
+<meta name="description" content="Drop a .pcap or .pcapng and read it as a football play: hosts become players, flows become route arrows, and a coach's call tells you what the traffic did. 100% in your browser.">
+<meta name="theme-color" content="#06070c">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Packet Playbook - read a packet capture as a football play">
+<meta property="og:description" content="Hosts become players, flows become routes, scans become blitzes. Drop a pcap, get the whiteboard and the coach's call. Runs entirely in your browser.">
+<meta property="og:image" content="https://tootenramen.github.io/Packet-Playbook/docs/hero.png">
+<meta property="og:url" content="https://tootenramen.github.io/Packet-Playbook/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Packet Playbook - read a packet capture as a football play">
+<meta name="twitter:description" content="Drop a pcap, see the play: routes, blitzes, hurry-up beacons, and the coach's call. Nothing leaves your browser.">
+<meta name="twitter:image" content="https://tootenramen.github.io/Packet-Playbook/docs/hero.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2306070c'/%3E%3Cpath d='M8 9l8 8M16 9l-8 8' stroke='%23ffd45e' stroke-width='2.6' stroke-linecap='round'/%3E%3Ccircle cx='22' cy='22' r='4.5' fill='none' stroke='%2334e3b0' stroke-width='2.4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#06070c; --ink:#f2f4fa; --mute:#a9b3cb; --dim:#9ba5c0; --line:rgba(255,255,255,.12);
+  --glass:rgba(255,255,255,.045); --glass2:rgba(255,255,255,.09);
+  --v:#9d8cff; --c:#22d3ee; --p:#ff7ab8; --g:#34e3b0; --a:#ffb86b; --y:#ffd45e; --r:#ff7b86;
+  --acc:var(--y);
+  --grad:linear-gradient(100deg,#ffd45e 0%,#34e3b0 52%,#22d3ee 100%);
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --disp:'Space Grotesk',-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',system-ui,sans-serif;
+  --body:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',system-ui,sans-serif;
+  --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;scroll-padding-top:76px}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.6 var(--body);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:8px;box-shadow:0 0 0 5px color-mix(in srgb,var(--acc) 55%,transparent)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.aurora{position:fixed;inset:0;z-index:-1;overflow:hidden;background:radial-gradient(120% 80% at 50% -10%,#10122b 0%,#06070c 62%)}
+.blob{position:absolute;left:var(--x);top:var(--y);width:66vmax;height:66vmax;margin:-33vmax 0 0 -33vmax}
+.blob b{display:block;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle,var(--col) 0,transparent 64%);filter:blur(60px);opacity:.24;animation:drift var(--t) ease-in-out infinite alternate;animation-delay:var(--dl,0s)}
+@keyframes drift{0%{transform:translate3d(-9%,-7%,0) scale(1) rotate(0)}100%{transform:translate3d(11%,9%,0) scale(1.2) rotate(50deg)}}
+.grain{position:absolute;inset:0;opacity:.035;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* nav */
+.nav{position:fixed;z-index:70;top:12px;left:50%;transform:translateX(-50%);max-width:calc(100% - 20px);display:flex;align-items:center;gap:4px;padding:5px;border-radius:999px;background:rgba(14,16,28,.62);border:1px solid var(--line);-webkit-backdrop-filter:blur(18px) saturate(150%);backdrop-filter:blur(18px) saturate(150%);box-shadow:0 10px 40px -10px #000;animation:navIn .9s var(--ease) both .2s}
+@keyframes navIn{from{opacity:0;transform:translate(-50%,-24px)}}
+.nav .brand{flex:none;height:40px;padding:0 16px;border-radius:999px;display:flex;align-items:center;gap:8px;font:700 .9rem var(--disp);letter-spacing:.02em;text-decoration:none;color:#07080d;background:var(--grad);white-space:nowrap}
+.nav a.l{display:block;white-space:nowrap;padding:9px 16px;border-radius:999px;font:500 .86rem var(--body);color:var(--mute);text-decoration:none;min-height:40px;line-height:22px;transition:color .25s,background .25s}
+.nav a.l:hover{color:#fff;background:rgba(255,255,255,.11)}
+@media(max-width:560px){.nav a.l{padding:9px 10px;font-size:.78rem}.nav .brand{padding:0 12px}.nav .brand span{display:none}}
+.wrap{width:100%;max-width:1480px;margin:0 auto;padding:0 clamp(16px,4vw,44px)}
+/* hero */
+.hero{display:grid;gap:18px;align-items:end;max-width:1480px;margin:0 auto;padding:clamp(78px,9vh,88px) clamp(16px,4vw,44px) 16px}
+@media(min-width:1000px){.hero{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:36px}}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;padding:6px 14px;border-radius:999px;font:500 .72rem var(--body);letter-spacing:.14em;text-transform:uppercase;color:#d3dbee;border:1px solid var(--line);background:var(--glass)}
+.eyebrow i{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 12px var(--acc);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35;transform:scale(.7)}}
+h1{margin:12px 0 0;font:700 clamp(1.9rem,3.5vw,2.75rem)/1.05 var(--disp);letter-spacing:-.04em;overflow-wrap:anywhere}
+.gw{display:inline-block;background:var(--grad);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:shimmer 14s linear infinite;padding-bottom:.08em}
+@keyframes shimmer{from{background-position:0 0}to{background-position:-260% 0}}
+.lede{margin:10px 0 0;max-width:58ch;font:500 clamp(.95rem,1.4vw,1.08rem)/1.45 var(--disp);color:#d9e0f0}
+.glass{position:relative;border-radius:22px;background:var(--glass);border:1px solid var(--line);-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 24px 60px -24px rgba(0,0,0,.7)}
+.drop{padding:16px 18px;display:grid;gap:12px;border-style:dashed;border-color:rgba(255,255,255,.22);transition:border-color .25s,background .25s}
+.drop.over{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.drop .row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.drop .t{font:600 .95rem var(--disp)}
+.drop .t small{display:block;font:400 .78rem var(--body);color:var(--mute);margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 20px;border-radius:999px;font:600 .9rem var(--body);text-decoration:none;cursor:pointer;border:1px solid var(--line);color:#fff;background:rgba(255,255,255,.07);transition:transform .25s var(--ease),background .3s,box-shadow .3s,border-color .3s}
+.btn:hover{transform:translateY(-2px);background:rgba(255,255,255,.12);box-shadow:0 12px 40px -8px color-mix(in srgb,var(--acc) 55%,transparent)}
+.btn.pri{color:#06070c;border-color:transparent;background:var(--grad)}
+.btn.pri:hover{background:var(--grad)}
+.btn.sm{min-height:40px;padding:0 15px;font-size:.82rem}
+.btn[aria-pressed=true]{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 16%,transparent);color:#fff}
+.btn svg{width:16px;height:16px;flex:none}
+.priv{font-size:.76rem;color:var(--mute);display:flex;gap:8px;align-items:flex-start;line-height:1.4}
+.priv svg{flex:none;width:15px;height:15px;margin-top:1px;color:var(--g)}
+#msg{margin:0 auto;max-width:1480px;width:calc(100% - clamp(32px,8vw,88px))}
+#msg:not(:empty){padding:12px 16px;border-radius:14px;border:1px solid rgba(255,123,134,.5);background:rgba(255,123,134,.1);color:#ffd3d7;font-size:.9rem;margin-bottom:12px}
+/* app */
+.app{display:grid;gap:16px;padding-bottom:30px}
+@media(min-width:1000px){.app{grid-template-columns:minmax(0,1.6fr) minmax(330px,.9fr);align-items:stretch}}
+.board{padding:14px 14px 12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.bhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:2px 4px}
+.bhead h2{margin:0;font:700 1.15rem var(--disp);letter-spacing:-.01em;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font:600 .7rem var(--body);letter-spacing:.05em;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#d6deef;white-space:nowrap}
+.chip.y{color:var(--y);border-color:rgba(255,212,94,.45);background:rgba(255,212,94,.1)}
+.chip.g{color:var(--g);border-color:rgba(52,227,176,.45);background:rgba(52,227,176,.1)}
+.chip.r{color:var(--r);border-color:rgba(255,123,134,.45);background:rgba(255,123,134,.1)}
+.chip.a{color:var(--a);border-color:rgba(255,184,107,.45);background:rgba(255,184,107,.1)}
+.chip.v{color:#b9afff;border-color:rgba(157,140,255,.5);background:rgba(157,140,255,.12)}
+.field{position:relative;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.14);background:#08241c;box-shadow:inset 0 0 0 1px rgba(0,0,0,.35),0 26px 60px -30px #000;aspect-ratio:1.8/1;touch-action:pan-y}
+@media(min-width:1000px){.field{aspect-ratio:auto;flex:1 1 auto;min-height:300px}}
+.field canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.field:focus-visible{outline-offset:4px}
+@media(max-width:700px){.field{aspect-ratio:.82/1}}
+.key{display:flex;flex-wrap:wrap;gap:6px 14px;padding:0 4px;font-size:.74rem;color:var(--mute)}
+.key span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.key i{width:18px;height:0;border-top:3px solid var(--k);border-radius:2px}
+.key i.d{border-top-style:dashed}
+.xport{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:2px 2px 0}
+.xport .ib{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.07);transition:background .25s,transform .25s var(--ease)}
+.xport .ib:hover{background:rgba(255,255,255,.14)}
+.xport .ib.main{width:52px;height:52px;background:var(--grad);border-color:transparent;color:#06070c}
+.xport .ib svg{width:20px;height:20px}
+.scrub{flex:1 1 220px;min-width:140px;display:flex;flex-direction:column;gap:2px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;cursor:pointer;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:99px;background:linear-gradient(90deg,var(--y) var(--pct,0%),rgba(255,255,255,.16) var(--pct,0%))}
+input[type=range]::-moz-range-track{height:6px;border-radius:99px;background:rgba(255,255,255,.16)}
+input[type=range]::-moz-range-progress{height:6px;border-radius:99px;background:var(--y)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid var(--y);margin-top:-7px;box-shadow:0 2px 10px #000}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--y)}
+.clock{font:500 .74rem var(--mono);color:var(--mute);display:flex;justify-content:space-between;gap:8px}
+select.sp{height:40px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.07);padding:0 12px;cursor:pointer;color:#fff}
+select.sp option{background:#10122b;color:#fff}
+/* side */
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.call{padding:18px 20px;border-left:4px solid var(--tone,var(--g))}
+.eb{font:600 .68rem var(--body);letter-spacing:.18em;text-transform:uppercase;color:var(--mute);display:flex;align-items:center;gap:8px}
+.eb i{width:7px;height:7px;border-radius:50%;background:var(--tone,var(--g));box-shadow:0 0 10px var(--tone,var(--g))}
+.call h3{margin:8px 0 6px;font:700 1.45rem/1.15 var(--disp);letter-spacing:-.02em}
+.call p{margin:0;color:#cdd6ea;font-size:.88rem;line-height:1.5}
+.call .also{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.score{padding:14px 16px;display:grid;grid-template-columns:repeat(4,1fr);gap:4px 10px}
+.stat{display:flex;flex-direction:column;min-width:0}
+.stat b{font:700 1.35rem var(--disp);letter-spacing:-.02em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat span{font:600 .64rem var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.mvp{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin-top:8px;padding:9px 12px;border-radius:12px;background:rgba(255,212,94,.08);border:1px solid rgba(255,212,94,.28);font-size:.82rem;min-width:0}
+.mvp b{font:700 .72rem var(--body);letter-spacing:.14em;color:var(--y);flex:none}
+.mvp span{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.mvp em{font-style:normal;color:var(--mute);margin-left:auto;flex:none}
+.plays{display:flex;flex-direction:column;min-height:250px;flex:1 1 auto}
+.plays .eb{padding:14px 18px 8px}
+.plays ol{list-style:none;margin:0;padding:0 8px 10px;overflow:auto;flex:1 1 0;min-height:0;max-height:560px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent}
+@media(max-width:999px){.plays{flex:none}.plays ol{max-height:420px;min-height:260px}}
+.plays li{margin:0}
+.pl{all:unset;box-sizing:border-box;display:grid;grid-template-columns:26px 1fr;gap:2px 10px;width:100%;padding:9px 10px;border-radius:12px;cursor:pointer;border-left:3px solid transparent;transition:background .2s,opacity .3s}
+.pl:hover{background:rgba(255,255,255,.06)}
+.pl:focus-visible{outline:2px solid #fff;box-shadow:0 0 0 5px rgba(255,212,94,.5)}
+.pl .n{font:700 .8rem var(--mono);color:var(--dim);padding-top:2px}
+.pl .m{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font:500 .7rem var(--mono);color:var(--mute)}
+.pl .m .dn{color:var(--kc);font-weight:700}
+.pl .tx{grid-column:2;font-size:.84rem;line-height:1.42;color:#dbe2f2}
+.pl.fut{opacity:.8}
+.pl.cur{background:rgba(255,212,94,.1);border-left-color:var(--y);opacity:1}
+.pl.cur .n{color:var(--y)}
+.pl.fut .tx{color:#bcc6dd}
+/* legend */
+.sec{padding-block:clamp(44px,6vw,80px) 10px}
+.kicker{margin:0 0 8px;font:600 .74rem var(--body);letter-spacing:.2em;text-transform:uppercase;color:var(--acc)}
+h2.big{margin:0;font:700 clamp(1.7rem,3.8vw,2.7rem)/1.06 var(--disp);letter-spacing:-.03em}
+.sub{margin:12px 0 0;color:var(--mute);max-width:60ch;font-size:1rem}
+.lg{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));margin-top:26px}
+.lg .it{padding:16px 16px 14px;display:grid;grid-template-columns:54px 1fr;gap:4px 14px;align-items:start}
+.lg svg{width:54px;height:40px;grid-row:span 2}
+.lg b{font:600 1.02rem var(--disp);letter-spacing:-.01em;color:var(--k)}
+.lg p{margin:0;font-size:.84rem;color:#c5cee3;line-height:1.45}
+.how{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));margin-top:22px}
+.how .it{padding:18px}
+.how h3{margin:0 0 6px;font:600 1.05rem var(--disp)}
+.how p{margin:0;font-size:.88rem;color:#c5cee3}
+footer{padding:50px 0 60px;text-align:center;color:var(--mute);font-size:.84rem}
+footer a{color:#fff;text-underline-offset:3px}
+footer small{display:block;margin-top:10px;color:var(--dim);font-size:.74rem}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:90;padding:10px 18px;border-radius:999px;background:rgba(14,16,28,.9);border:1px solid var(--line);font-size:.86rem;box-shadow:0 10px 40px -10px #000}
+.toast[hidden]{display:none}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="aurora" aria-hidden="true">
+  <div class="blob" style="--x:12%;--y:8%;--col:#ffd45e;--t:26s"><b style="opacity:.12"></b></div>
+  <div class="blob" style="--x:88%;--y:18%;--col:#22d3ee;--t:31s;--dl:-8s"><b></b></div>
+  <div class="blob" style="--x:70%;--y:96%;--col:#34e3b0;--t:29s;--dl:-14s"><b style="opacity:.16"></b></div>
+  <div class="blob" style="--x:6%;--y:90%;--col:#9d8cff;--t:34s;--dl:-4s"><b></b></div>
+  <div class="grain"></div>
+</div>
+
+<nav class="nav" aria-label="Main">
+  <a class="brand" href="#top" aria-label="Packet Playbook, top"><svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true"><path d="M8 9l8 8M16 9l-8 8" stroke="#07080d" stroke-width="3.4" stroke-linecap="round"/><circle cx="22" cy="22" r="5" fill="none" stroke="#07080d" stroke-width="3"/></svg><span>Packet Playbook</span></a>
+  <a class="l" href="#board">Whiteboard</a><a class="l" href="#legend">Legend</a><a class="l" href="#how">How</a>
+</nav>
+
+<header class="hero" id="top">
+  <div>
+    <span class="eyebrow"><i></i>pcap in, play out</span>
+    <h1>Read your packets like a <span class="gw">playbook</span></h1>
+    <p class="lede">Hosts become players, flows become routes, a port scan becomes a blitz. Drop a capture, get the whiteboard and the coach's call.</p>
+  </div>
+  <div class="glass drop" id="drop">
+    <div class="row">
+      <button class="btn pri" id="bOpen" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>Drop a .pcap / .pcapng</button>
+      <div class="t">or load a sample<small>Fictional traffic, generated in your browser.</small></div>
+    </div>
+    <div class="chips" id="samples" role="group" aria-label="Fictional sample plays"></div>
+    <div class="priv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="3"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span>Your capture never leaves this tab. It is parsed locally in JavaScript; nothing is uploaded.</span></div>
+    <input type="file" id="file" accept=".pcap,.pcapng,.cap,application/vnd.tcpdump.pcap" class="sr" tabindex="-1" aria-label="Choose a pcap or pcapng file">
+  </div>
+</header>
+<div id="msg" role="alert"></div>
+
+<main class="wrap app" id="board">
+  <section class="glass board" aria-label="Whiteboard">
+    <div class="bhead"><h2 id="title">Loading...</h2><span class="chip y" id="chipSim" hidden>fictional sample</span><span class="chip" id="chipFmt"></span></div>
+    <div class="field" id="field" tabindex="0" role="img" aria-label="Whiteboard">
+      <canvas id="cv" aria-hidden="true"></canvas>
+    </div>
+    <div class="key" id="key" aria-label="Route key"></div>
+    <div class="xport">
+      <button class="ib" id="bPrev" type="button" aria-label="Previous play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h2.5v14H6zM20 5v14L9.5 12z"/></svg></button>
+      <button class="ib main" id="bPlay" type="button" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" id="icPlay"><path d="M7 4.5v15l13-7.5z"/></svg></button>
+      <button class="ib" id="bNext" type="button" aria-label="Next play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M15.5 5H18v14h-2.5zM4 5v14l10.5-7z"/></svg></button>
+      <div class="scrub"><input type="range" id="scr" min="0" max="1000" value="0" aria-label="Scrub through the play"><div class="clock"><span id="clkA">+00:00.0</span><span id="clkB">play 0 / 0</span></div></div>
+      <label class="sr" for="spd">Speed</label>
+      <select class="sp" id="spd"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select>
+      <button class="btn sm" id="bExp" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M6 12l6 6 6-6M4 21h16"/></svg>Poster PNG</button>
+    </div>
+  </section>
+  <aside class="side" aria-label="Analysis">
+    <section class="glass call" id="call" aria-live="polite"></section>
+    <section class="glass score" id="score" aria-label="Scoreboard"></section>
+    <section class="glass plays"><div class="eb">Play-by-play</div><ol id="plist"></ol></section>
+  </aside>
+</main>
+
+<section class="wrap sec" id="legend">
+  <p class="kicker">The playbook key</p>
+  <h2 class="big">What the traffic <span class="gw">means</span> on the field</h2>
+  <p class="sub">Every network event has a football twin. The mapping is a metaphor, so a hurry-up is a hint to investigate, not a verdict.</p>
+  <div class="lg" id="lgrid"></div>
+</section>
+
+<section class="wrap sec" id="how">
+  <p class="kicker">Under the hood</p>
+  <h2 class="big">Honest, local, <span class="gw">readable</span></h2>
+  <div class="how">
+    <div class="glass it"><h3>Parsed in your tab</h3><p>A small JavaScript reader handles classic pcap and pcapng (Ethernet, raw IP, Linux cooked). No upload, no server, no analytics.</p></div>
+    <div class="glass it"><h3>Flows, not guesses</h3><p>Packets are stitched into TCP flows with handshake, retransmit and reset tracking, plus DNS, UDP and ICMP groups.</p></div>
+    <div class="glass it"><h3>Heuristics, labelled</h3><p>Scans, beacons and DNS tunnelling use simple, explainable rules. Treat the coach's call as a lead to check, not a ruling.</p></div>
+    <div class="glass it"><h3>Yardage is bytes</h3><p>Yards use a log scale of bytes moved, so a 40 KB fetch and a 400 MB haul both fit on a 100 yard field.</p></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">Built by <a href="https://www.linkedin.com/in/gustavo-freitas-69b93910b/" rel="noopener">Gustavo Freitas</a>
+  <small>Samples are fictional and use documentation address ranges only (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24, 10.0.0.0/8). Not affiliated with any sports league.</small></div>
+</footer>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(()=>{'use strict';
+const PG=window.PG={};
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function rnd(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;};
+function fmtB(n){if(n<1024)return Math.round(n)+' B';if(n<1048576)return (n/1024).toFixed(n<10240?1:0)+' KB';if(n<1073741824)return (n/1048576).toFixed(n<10485760?1:0)+' MB';return (n/1073741824).toFixed(2)+' GB';}
+function fmtN(n){return n.toLocaleString('en-US');}
+function fmtD(s){s=Math.max(0,s);if(s<60)return s.toFixed(s<10?1:0)+' s';const m=Math.floor(s/60),r=Math.round(s%60);if(m<60)return m+'m '+String(r).padStart(2,'0')+'s';return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m';}
+function fmtRel(s){s=Math.max(0,s);const m=Math.floor(s/60),r=s-m*60;return '+'+String(m).padStart(2,'0')+':'+(r<10?'0':'')+r.toFixed(1);}
+function trunc(s,n){s=String(s);return s.length>n?s.slice(0,n-1)+'…':s;}
+const ORD=['1st','2nd','3rd','4th'];
+
+const u16=(d,i)=>((d[i]<<8)|d[i+1])>>>0;
+const ip4s=(d,i)=>d[i]+'.'+d[i+1]+'.'+d[i+2]+'.'+d[i+3];
+function ip6s(d,i){const g=[];for(let k=0;k<8;k++)g.push(((d[i+2*k]<<8)|d[i+2*k+1]).toString(16));let bs=-1,bl=0;for(let k=0;k<8;){if(g[k]==='0'){let j=k;while(j<8&&g[j]==='0')j++;if(j-k>bl&&j-k>1){bs=k;bl=j-k;}k=j;}else k++;}
+ if(bs<0)return g.join(':');return g.slice(0,bs).join(':')+'::'+g.slice(bs+bl).join(':');}
+function readName(d,off,start){const parts=[];let p=off,jumped=false,end=-1,guard=0,total=0;
+ while(guard++<64){const l=d[p];if(l===undefined)return null;
+  if(l===0){if(!jumped)end=p+1;return{name:parts.join('.'),end};}
+  if((l&0xC0)===0xC0){const q=((l&0x3F)<<8)|d[p+1];if(!jumped)end=p+2;jumped=true;p=start+q;continue;}
+  if(l>63)return null;const s=p+1;if(s+l>d.length)return null;
+  let lab='';for(let i=0;i<l;i++)lab+=String.fromCharCode(d[s+i]);
+  parts.push(lab);total+=l+1;if(total>255)return null;p=s+l;}
+ return null;}
+function parseDns(d,st){
+ if(d.length-st<12)return null;
+ const fl=u16(d,st+2),qd=u16(d,st+4),an=u16(d,st+6);
+ if(qd<1||qd>8||((fl>>11)&15)>2)return null;
+ const q=readName(d,st+12,st);if(!q||!q.name||!/^[A-Za-z0-9_.\-*]+$/.test(q.name))return null;
+ const r={name:q.name.toLowerCase(),qr:(fl>>15)&1,answers:[]};
+ let o=q.end+4;
+ if(r.qr){for(let i=0;i<Math.min(an,16);i++){const n=readName(d,o,st);if(!n)break;o=n.end;if(o+10>d.length)break;const ty=u16(d,o),rl=u16(d,o+8);o+=10;if(o+rl>d.length)break;
+  if(ty===1&&rl===4)r.answers.push({name:n.name.toLowerCase(),ip:ip4s(d,o)});else if(ty===28&&rl===16)r.answers.push({name:n.name.toLowerCase(),ip:ip6s(d,o)});o+=rl;}}
+ return r;}
+function parseSni(d,p){
+ try{if(d[p]!==0x16||d[p+1]!==3||d[p+5]!==1)return null;
+  let o=p+43;if(o>=d.length)return null;
+  o+=1+d[o];o+=2+u16(d,o);o+=1+d[o];
+  const extEnd=Math.min(d.length,o+2+u16(d,o));o+=2;
+  while(o+4<=extEnd){const ty=u16(d,o),l=u16(d,o+2);o+=4;
+   if(ty===0){const nl=u16(d,o+3),s=o+5;if(s+nl>d.length||nl<1||nl>253)return null;let n='';for(let i=0;i<nl;i++)n+=String.fromCharCode(d[s+i]);return /^[A-Za-z0-9.\-_]+$/.test(n)?n.toLowerCase():null;}
+   o+=l;}}catch(e){}
+ return null;}
+const METH=/^(GET|POST|PUT|HEAD|DELETE|OPTIONS|PATCH|CONNECT) /;
+function parseHttp(d,p){
+ const end=Math.min(d.length,p+700);if(end-p<8)return null;
+ let s='';for(let i=p;i<end;i++)s+=String.fromCharCode(d[i]);
+ const m=METH.exec(s);if(!m)return null;
+ const nl=s.indexOf('\r\n');const first=s.slice(0,nl<0?s.length:nl);const path=(first.split(' ')[1]||'/').split('?')[0].slice(0,80);
+ const r={req:m[1]+' '+path};
+ const h=/\r\nhost:[ \t]*([^\r\n:]+)/i.exec(s);if(h)r.host=h[1].trim().toLowerCase().slice(0,100);
+ /* the secret is detected but never stored */
+ if(/\r\nauthorization:[ \t]*basic[ \t]+\S+/i.test(s))r.auth='basic';
+ else if(/(^|[?&\s])(pass(word)?|passwd|pwd)=/i.test(s))r.auth='form';
+ return r;}
+function decodeFrame(d,lt,orig,t){
+ let off=0,et=0;
+ if(lt===1){if(d.length<14)return null;et=u16(d,12);off=14;while((et===0x8100||et===0x88A8||et===0x9100)&&off+4<=d.length){et=u16(d,off+2);off+=4;}}
+ else if(lt===0){if(d.length<4)return null;et=(d[0]===2||d[3]===2)?0x0800:0x86dd;off=4;}
+ else if(lt===101||lt===228||lt===229){const v=d[0]>>4;et=v===4?0x0800:v===6?0x86dd:0;}
+ else if(lt===113){et=u16(d,14);off=16;}
+ else if(lt===276){et=u16(d,0);off=20;}
+ else return null;
+ let src,dst,proto,l4;
+ if(et===0x0800){
+  if(d.length<off+20||(d[off]>>4)!==4)return null;
+  const ihl=(d[off]&15)*4;if(ihl<20)return null;
+  proto=d[off+9];src=ip4s(d,off+12);dst=ip4s(d,off+16);l4=off+ihl;
+  if((u16(d,off+6)&0x1fff)>0)l4=-1;
+ }else if(et===0x86dd){
+  if(d.length<off+40||(d[off]>>4)!==6)return null;
+  let nh=d[off+6];src=ip6s(d,off+8);dst=ip6s(d,off+24);l4=off+40;
+  for(let g=0;g<6;g++){if(nh===0||nh===43||nh===60){nh=d[l4];l4+=8+d[l4+1]*8;}else if(nh===44){nh=d[l4];l4+=8;}else if(nh===51){nh=d[l4];l4+=8+d[l4+1]*4;}else break;}
+  proto=nh;
+ }else return null;
+ const p={t,len:orig,src,dst,proto:'other',sport:0,dport:0,flags:0,seq:0,pl:0};
+ if(l4<0||l4>=d.length)return p;
+ if(proto===6){p.proto='tcp';p.sport=u16(d,l4);p.dport=u16(d,l4+2);p.flags=d[l4+13]|0;p.seq=((d[l4+4]<<24)|(d[l4+5]<<16)|(d[l4+6]<<8)|d[l4+7])>>>0;p.pl=Math.max(0,orig-l4-((d[l4+12]>>4)*4));
+  const st=l4+((d[l4+12]>>4)*4);
+  if(st<d.length&&st>l4){
+   if(p.sport===53||p.dport===53){const q=parseDns(d,st+2);if(q)p.dns=q;}
+   else{const s=parseSni(d,st);if(s)p.sni=s;else{const h=parseHttp(d,st);if(h){p.req=h.req;if(h.host)p.host=h.host;if(h.auth)p.auth=h.auth;}
+    else if(p.dport===21&&d[st]===0x50&&d[st+1]===0x41&&d[st+2]===0x53&&d[st+3]===0x53&&d[st+4]===32)p.auth='ftp';}}}
+ }else if(proto===17){p.proto='udp';p.sport=u16(d,l4);p.dport=u16(d,l4+2);
+  const st=l4+8;
+  if(st<d.length&&(p.sport===53||p.dport===53||p.sport===5353||p.dport===5353)){const q=parseDns(d,st);if(q)p.dns=q;}
+ }else if(proto===1||proto===58){p.proto='icmp';p.icmp=d[l4];}
+ return p;}
+PG.parse=function(input,opts){
+ opts=opts||{};const max=opts.maxPackets||400000;
+ const out={packets:[],warnings:[],format:null,error:null,skipped:0};
+ try{
+  let u8;
+  if(input instanceof Uint8Array)u8=input;else if(input instanceof ArrayBuffer)u8=new Uint8Array(input);else if(input&&input.buffer instanceof ArrayBuffer)u8=new Uint8Array(input.buffer,input.byteOffset||0,input.byteLength);
+  else{out.error='I could not read that file.';return out;}
+  if(u8.length<24){out.error='That file is too small to be a packet capture.';return out;}
+  const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
+  const mLE=dv.getUint32(0,true);
+  if(mLE===0xA1B2C3D4||mLE===0xA1B23C4D||mLE===0xD4C3B2A1||mLE===0x4D3CB2A1){
+   out.format='pcap';const le=(mLE===0xA1B2C3D4||mLE===0xA1B23C4D);const nano=(mLE===0xA1B23C4D||mLE===0x4D3CB2A1);
+   const lt=dv.getUint32(20,le)&0xffff;let off=24;const div=nano?1e9:1e6;
+   while(off+16<=u8.length){
+    const sec=dv.getUint32(off,le),fr=dv.getUint32(off+4,le),incl=dv.getUint32(off+8,le),orig=dv.getUint32(off+12,le);
+    if(incl>0x4000000||off+16+incl>u8.length){out.warnings.push('The file ends in the middle of a packet; I used everything before that.');break;}
+    const d=u8.subarray(off+16,off+16+incl);off+=16+incl;
+    try{const p=decodeFrame(d,lt,Math.max(orig,incl),sec+fr/div);if(p)out.packets.push(p);else out.skipped++;}catch(e){out.skipped++;}
+    if(out.packets.length>=max){out.warnings.push('Large capture: I used the first '+fmtN(max)+' packets.');break;}
+   }
+  }else if(mLE===0x0A0D0D0A){
+   out.format='pcapng';let le=true;let off=0;let ifs=[];
+   while(off+12<=u8.length){
+    const bt=dv.getUint32(off,true)===0x0A0D0D0A?0x0A0D0D0A:dv.getUint32(off,le);
+    if(bt===0x0A0D0D0A){
+     if(off+12>u8.length)break;
+     if(dv.getUint32(off+8,true)===0x1A2B3C4D)le=true;else if(dv.getUint32(off+8,false)===0x1A2B3C4D)le=false;else{out.warnings.push('Unreadable section header.');break;}
+     ifs=[];}
+    const bl=dv.getUint32(off+4,le);
+    if(bl<12||bl%4!==0||off+bl>u8.length){out.warnings.push('The file ends in the middle of a block; I used everything before that.');break;}
+    if(bt===1){const ltp=dv.getUint16(off+8,le);let units=1e6;let o=off+16;const e=off+bl-4;
+     while(o+4<=e){const code=dv.getUint16(o,le),ol=dv.getUint16(o+2,le);if(code===0)break;if(code===9&&ol>=1){const v=u8[o+4];units=(v&0x80)?Math.pow(2,v&0x7f):Math.pow(10,v);}o+=4+((ol+3)&~3);}
+     ifs.push({lt:ltp,units});
+    }else if(bt===6||bt===2||bt===3){
+     let ifi=0,hi=0,lo=0,cap,orig,ds;
+     if(bt===6){ifi=dv.getUint32(off+8,le);hi=dv.getUint32(off+12,le);lo=dv.getUint32(off+16,le);cap=dv.getUint32(off+20,le);orig=dv.getUint32(off+24,le);ds=off+28;}
+     else if(bt===2){ifi=dv.getUint16(off+8,le);hi=dv.getUint32(off+12,le);lo=dv.getUint32(off+16,le);cap=dv.getUint32(off+20,le);orig=dv.getUint32(off+24,le);ds=off+28;}
+     else{orig=dv.getUint32(off+8,le);cap=Math.min(orig,bl-16);ds=off+12;}
+     const inf=ifs[ifi]||ifs[0];
+     if(inf&&cap<=bl&&ds+cap<=off+bl){
+      const t=bt===3?(out.packets.length?out.packets[out.packets.length-1].t:0):(hi*4294967296+lo)/inf.units;
+      try{const p=decodeFrame(u8.subarray(ds,ds+cap),inf.lt,Math.max(orig,cap),t);if(p)out.packets.push(p);else out.skipped++;}catch(e){out.skipped++;}
+      if(out.packets.length>=max){out.warnings.push('Large capture: I used the first '+fmtN(max)+' packets.');break;}
+     }else out.skipped++;
+    }
+    off+=bl;
+   }
+  }else{out.error='That does not look like a .pcap or .pcapng file. Try a capture from Wireshark or tcpdump.';return out;}
+  if(!out.packets.length)out.error='I opened the file but found no IP traffic in it (only unsupported link types or empty frames).';
+ }catch(e){out.error='That file is damaged in a way I could not recover from.';}
+ return out;};
+
+/* ============================ BUILDERS (synthetic captures + tests) ============================ */
+const B=PG.build={};let SEQC=1000;
+function ip6b(s){const two=s.includes('::');const [a,b]=s.split('::');const A=a?a.split(':'):[];const Bk=b?b.split(':'):[];const g=[...A,...(two?Array(8-A.length-Bk.length).fill('0'):[]),...Bk];const o=[];for(const x of g){const v=parseInt(x||'0',16);o.push(v>>8,v&255);}return o;}
+const ipBytes=s=>s.includes(':')?ip6b(s):s.split('.').map(Number);
+B.str=s=>Array.from(s,c=>c.charCodeAt(0)&255);
+B.dns=(name,o={})=>{const out=[0x12,0x34,o.qr?0x81:0x01,o.qr?0x80:0x00,0,1,0,o.qr&&o.ip?1:0,0,0,0,0];for(const l of name.split('.')){out.push(l.length,...B.str(l));}out.push(0,0,1,0,1);
+ if(o.qr&&o.ip)out.push(0xc0,0x0c,0,1,0,1,0,0,0,60,0,4,...ipBytes(o.ip));return out;};
+B.tlsHello=sni=>{const n=B.str(sni);const ext=[0,0,(n.length+5)>>8,(n.length+5)&255,(n.length+3)>>8,(n.length+3)&255,0,n.length>>8,n.length&255,...n];
+ const body=[3,3,...new Array(32).fill(7),0,0,2,0x13,1,1,0,ext.length>>8,ext.length&255,...ext];
+ const hs=[1,0,body.length>>8,body.length&255,...body];return [0x16,3,1,hs.length>>8,hs.length&255,...hs];};
+B.http=(m,path,host,extra)=>B.str(m+' '+path+' HTTP/1.1\r\nHost: '+host+'\r\nUser-Agent: demo\r\n'+(extra||'')+'\r\n');
+B.frame=function(o){
+ const payload=typeof o.payload==='string'?B.str(o.payload):(o.payload?Array.from(o.payload):[]);
+ const proto=o.proto||'tcp',sp=o.sport||0,dp=o.dport||0;let l4,pn;
+ if(proto==='tcp'){pn=6;const sq=o.seq==null?(SEQC=(SEQC+1460)>>>0):o.seq>>>0;l4=[sp>>8,sp&255,dp>>8,dp&255,(sq>>>24)&255,(sq>>>16)&255,(sq>>>8)&255,sq&255,0,0,0,2,0x50,o.flags||0,0xff,0xff,0,0,0,0,...payload];}
+ else if(proto==='udp'){pn=17;const l=8+payload.length;l4=[sp>>8,sp&255,dp>>8,dp&255,l>>8,l&255,0,0,...payload];}
+ else{pn=o.v6?58:1;l4=[o.itype==null?8:o.itype,0,0,0,0,0,0,1,...payload];}
+ const v6=o.src.includes(':');const vl=o.vlan?4:0;
+ const actual=l4.length+(v6?0:20);
+ const total=o.wire?Math.max(o.wire-14-vl,actual):actual;
+ let ip;
+ if(!v6)ip=[0x45,0,total>>8,total&255,0,0,0x40,0,64,pn,0,0,...ipBytes(o.src),...ipBytes(o.dst)];
+ else{const pl=Math.max(total,l4.length);ip=[0x60,0,0,0,pl>>8,pl&255,pn,64,...ipBytes(o.src),...ipBytes(o.dst)];}
+ const mac=(s)=>{const b=ipBytes(s);return [2,0,0,b[b.length-3]||0,b[b.length-2]||0,b[b.length-1]||0];};
+ const et=v6?0x86dd:0x0800;
+ const eth=[...mac(o.dst),...mac(o.src),...(o.vlan?[0x81,0,o.vlan>>8,o.vlan&255]:[]),et>>8,et&255];
+ const bytes=Uint8Array.from([...eth,...ip]);
+ const all=new Uint8Array(bytes.length+l4.length);all.set(bytes);all.set(l4,bytes.length);
+ return{bytes:all,wire:Math.max(o.wire||0,all.length)};};
+B.pcap=function(frames,o={}){const le=!o.be,nano=!!o.nano;let tot=24;for(const f of frames)tot+=16+f.bytes.length;
+ const u=new Uint8Array(tot),dv=new DataView(u.buffer);dv.setUint32(0,nano?0xA1B23C4D:0xA1B2C3D4,le);dv.setUint16(4,2,le);dv.setUint16(6,4,le);dv.setUint32(16,262144,le);dv.setUint32(20,o.lt==null?1:o.lt,le);
+ let off=24;for(const f of frames){const s=Math.floor(f.t),fr=Math.round((f.t-s)*(nano?1e9:1e6));dv.setUint32(off,s,le);dv.setUint32(off+4,fr,le);dv.setUint32(off+8,f.bytes.length,le);dv.setUint32(off+12,f.wire||f.bytes.length,le);u.set(f.bytes,off+16);off+=16+f.bytes.length;}
+ return u;};
+B.pcapng=function(frames,o={}){const le=!o.be;const res=o.nanores?9:6;const mul=o.nanores?1e9:1e6;
+ const pad=n=>(n+3)&~3;let tot=28+32;for(const f of frames)tot+=32+pad(f.bytes.length);
+ const u=new Uint8Array(tot),dv=new DataView(u.buffer);let off=0;
+ dv.setUint32(0,0x0A0D0D0A,le);dv.setUint32(4,28,le);dv.setUint32(8,0x1A2B3C4D,le);dv.setUint16(12,1,le);dv.setUint16(14,0,le);dv.setUint32(16,0xffffffff,le);dv.setUint32(20,0xffffffff,le);dv.setUint32(24,28,le);off=28;
+ dv.setUint32(off,1,le);dv.setUint32(off+4,32,le);dv.setUint16(off+8,1,le);dv.setUint32(off+12,262144,le);dv.setUint16(off+16,9,le);dv.setUint16(off+18,1,le);u[off+20]=res;dv.setUint32(off+28,32,le);off+=32;
+ for(const f of frames){const v=Math.round(f.t*mul),hi=Math.floor(v/4294967296),lo=v%4294967296;const l=f.bytes.length,bl=32+pad(l);
+  dv.setUint32(off,6,le);dv.setUint32(off+4,bl,le);dv.setUint32(off+8,0,le);dv.setUint32(off+12,hi,le);dv.setUint32(off+16,lo,le);dv.setUint32(off+20,l,le);dv.setUint32(off+24,f.wire||l,le);u.set(f.bytes,off+28);dv.setUint32(off+bl-4,bl,le);off+=bl;}
+ return u;};
+
+/* ---------- synthetic scenarios ---------- */
+const T0=1767312000;
+function makeSim(seed){
+ const R=rnd(seed),fr=[];
+ const eph=()=>32768+Math.floor(R()*28000);
+ const add=(t,o)=>{const f=B.frame(o);fr.push({t:T0+t,bytes:f.bytes,wire:f.wire});};
+ const tcpOpen=(t,c,s,sp,dp)=>{add(t,{src:c,dst:s,sport:sp,dport:dp,flags:2});add(t+.012,{src:s,dst:c,sport:dp,dport:sp,flags:18});add(t+.013,{src:c,dst:s,sport:sp,dport:dp,flags:16});};
+ const tcpClose=(t,c,s,sp,dp)=>{add(t,{src:c,dst:s,sport:sp,dport:dp,flags:0x11});add(t+.01,{src:s,dst:c,sport:dp,dport:sp,flags:0x11});add(t+.02,{src:c,dst:s,sport:sp,dport:dp,flags:16});};
+ const data=(t,c,s,sp,dp,up,down,dur,first)=>{const n=clamp(Math.ceil((up+down)/60000),3,150);const nu=Math.max(1,Math.round(n*up/Math.max(1,up+down))),nd=Math.max(1,n-nu);
+  for(let i=0;i<nu;i++)add(t+dur*(i/nu)+.02,{src:c,dst:s,sport:sp,dport:dp,flags:24,payload:i===0&&first?first:[0x17,3,3,0,16],wire:Math.min(4000000,Math.max(80,Math.round(up/nu)))});
+  for(let i=0;i<nd;i++)add(t+dur*(i/nd)+.04,{src:s,dst:c,sport:dp,dport:sp,flags:24,payload:[0x17,3,3,0,16],wire:Math.min(4000000,Math.max(80,Math.round(down/nd)))});};
+ const tls=(t,c,s,sni,up,down,dur,port)=>{port=port||443;const sp=eph();tcpOpen(t,c,s,sp,port);data(t+.02,c,s,sp,port,up,down,dur,B.tlsHello(sni));tcpClose(t+dur+.1,c,s,sp,port);};
+ const dnsq=(t,c,res,name,ip)=>{const sp=eph();add(t,{proto:'udp',src:c,dst:res,sport:sp,dport:53,payload:B.dns(name),wire:80});add(t+.02,{proto:'udp',src:res,dst:c,sport:53,dport:sp,payload:B.dns(name,{qr:1,ip}),wire:110});};
+ const httpGet=(t,c,s,host,path,extra,port)=>{port=port||80;const sp=eph();tcpOpen(t,c,s,sp,port);add(t+.02,{src:c,dst:s,sport:sp,dport:port,flags:24,payload:B.http('GET',path,host,extra),wire:300});add(t+.06,{src:s,dst:c,sport:port,dport:sp,flags:24,payload:'HTTP/1.1 200 OK\r\n\r\n',wire:1400});tcpClose(t+.2,c,s,sp,port);};
+ const svc=[['cdn.example.com','203.0.113.10'],['mail.example.net','203.0.113.25'],['docs.example.org','203.0.113.44'],['chat.example.net','198.51.100.18'],['video.example.com','198.51.100.90'],['search.example.org','192.0.2.31'],['maps.example.net','192.0.2.52'],['store.example.com','203.0.113.71']];
+ const RES='10.20.0.2',FS='10.20.0.5',PRN='10.20.0.9';
+ const office=(n,end,dens)=>{
+  for(let w=0;w<n;w++){const c='10.20.0.'+(11+w);let t=R()*8;
+   const kind=w%6;
+   if(kind===3&&w<n){for(let u=t;u<end;u+=.9+R()*.6){const sp=eph();add(u,{proto:'udp',src:c,dst:'203.0.113.200',sport:16400,dport:16400,payload:[0x80,0,0,1],wire:640});add(u+.02,{proto:'udp',src:'203.0.113.200',dst:c,sport:16400,dport:16400,payload:[0x80,0,0,2],wire:640});}}
+   if(kind===5){for(let u=t;u<end;u+=2+R()*4){add(u,{proto:'icmp',src:c,dst:R()<.5?FS:'203.0.113.9',itype:8,wire:98});}}
+   while(t<end){const s=svc[Math.floor(R()*svc.length)];dnsq(t,c,RES,s[0],s[1]);
+    if(kind===1){httpGet(t+.1,c,s[1],s[0],'/news/'+Math.floor(R()*90));add(t+.5,{src:s[1],dst:c,sport:80,dport:eph(),flags:24,payload:[0x48,0x54],wire:60000+R()*300000});}
+    else if(kind===2){const sp=eph();tcpOpen(t+.1,c,FS,sp,445);data(t+.15,c,FS,sp,445,100000,300000+R()*600000,2+R()*3,'SMB');tcpClose(t+6,c,FS,sp,445);}
+    else{const big=R()<.12;tls(t+.1,c,s[1],s[0],2000+R()*40000,(big?900000:20000)+R()*200000,.5+R()*(big?6:2));}
+    if(R()<.2){const sp=eph();tcpOpen(t+.3,c,FS,sp,445);data(t+.35,c,FS,sp,445,30000+R()*80000,60000+R()*400000,1+R()*3,'SMB');tcpClose(t+5,c,FS,sp,445);}
+    if(R()<.05){const sp=eph();tcpOpen(t+.5,c,PRN,sp,9100);data(t+.55,c,PRN,sp,9100,250000,500,1,'PJL');tcpClose(t+3,c,PRN,sp,9100);}
+    t+=(8+R()*20)/dens;}}
+  for(let t=3;t<end;t+=64+(R()-.5)*1.5)add(t,{proto:'udp',src:RES,dst:'203.0.113.123',sport:123,dport:123,payload:[0x23,0,6,0xec],wire:90});
+  for(let t=5;t<end;t+=15)add(t,{proto:'icmp',src:'10.20.0.11',dst:'10.20.0.1',itype:8,wire:98});
+ };
+ const oneOffs=(k,end)=>{for(let i=0;i<k;i++){const ip='198.51.100.'+(120+i*7),c='10.20.0.'+(12+i%5),t=40+R()*(end-100),name='rare'+i+'.example.org';dnsq(t,c,RES,name,ip);const sp=eph();tcpOpen(t+.1,c,ip,sp,443);tcpClose(t+.5,c,ip,sp,443);}};
+ const beacon=(c,ip,sni,from,to,every)=>{for(let t=from;t<to;t+=every+(R()-.5)*every*.05)tls(t,c,ip,sni,700,420,.3,8443);};
+ const tunnel=(c,from,to)=>{const A='abcdefghijklmnopqrstuvwxyz234567';for(let t=from;t<to;t+=1.6+R()*1.6){let a='',b='';for(let i=0;i<38;i++)a+=A[Math.floor(R()*32)];for(let i=0;i<22;i++)b+=A[Math.floor(R()*32)];dnsq(t,c,RES,a+'.'+b+'.t.example-tun.net','192.0.2.9');}};
+ const scan=(src,from,target,ports,rate)=>{let t=from;const open=new Set([22,80,445,139]);for(const p of ports){const sp=eph();add(t,{src,dst:target,sport:sp,dport:p,flags:2,wire:60});
+   if(open.has(p)){add(t+.01,{src:target,dst:src,sport:p,dport:sp,flags:18,wire:60});add(t+.02,{src,dst:target,sport:sp,dport:p,flags:4,wire:54});}
+   else if(R()<.85)add(t+.01,{src:target,dst:src,sport:p,dport:sp,flags:20,wire:54});
+   t+=1/rate*(.6+R()*.8);}return t;};
+ const sweep=(src,from,base,list,ports)=>{let t=from;for(const h of list)for(const p of ports){const sp=eph(),dst=base+h;add(t,{src,dst,sport:sp,dport:p,flags:2,wire:60});if(h<=20&&R()<.9)add(t+.01,{src:dst,dst:src,sport:p,dport:sp,flags:20,wire:54});t+=.05+R()*.08;}};
+ const login=(t,c,host,ip)=>{for(let i=0;i<3;i++)httpGet(t+i*7,c,ip,host,'/admin','Authorization: Basic ZGVtbzpkZW1v\r\n');};
+ const build=()=>{fr.sort((a,b)=>a.t-b.t);return B.pcap(fr);};
+ return{add,tcpOpen,tcpClose,dnsq,eph,data,office,oneOffs,beacon,tunnel,scan,sweep,login,tls,httpGet,build,fr,R};}
+
+/* ============================ SAMPLES (fictional) ============================ */
+const SAMPLES=[
+ {id:'web',label:'Normal web fetch',title:'Sample: a normal web fetch',gen(){
+  const s=makeSim(5),C='10.0.0.5',RES='10.0.0.2';
+  s.dnsq(0,C,RES,'www.example.com','203.0.113.9');s.tls(.15,C,'203.0.113.9','www.example.com',4200,42000,1.2);
+  s.dnsq(2.1,C,RES,'static.example.com','203.0.113.44');s.tls(2.3,C,'203.0.113.44','static.example.com',3000,1400000,3.2);
+  s.dnsq(6.2,C,RES,'api.example.net','198.51.100.18');s.tls(6.4,C,'198.51.100.18','api.example.net',1800,9500,.8);
+  s.dnsq(8.4,C,RES,'img.example.org','192.0.2.31');
+  const sp=s.eph();s.tcpOpen(8.6,C,'192.0.2.31',sp,443);
+  s.add(8.7,{src:C,dst:'192.0.2.31',sport:sp,dport:443,flags:24,payload:B.tlsHello('img.example.org'),seq:5000,wire:520});
+  s.add(8.95,{src:C,dst:'192.0.2.31',sport:sp,dport:443,flags:24,payload:[0x17,3,3,0,16],seq:5000,wire:520});
+  s.add(9.5,{src:C,dst:'192.0.2.31',sport:sp,dport:443,flags:24,payload:[0x17,3,3,0,16],seq:5000,wire:520});
+  s.add(9.9,{src:'192.0.2.31',dst:C,sport:443,dport:sp,flags:24,payload:[0x17,3,3,0,16],wire:230000});
+  s.add(10.8,{src:'192.0.2.31',dst:C,sport:443,dport:sp,flags:4,wire:54});
+  for(let i=0;i<3;i++)s.add(12.4+i,{proto:'icmp',src:C,dst:'203.0.113.9',itype:8,wire:98});
+  return s.build();}},
+ {id:'scan',label:'Port-scan blitz',title:'Sample: a port-scan blitz',gen(){
+  const s=makeSim(7),C='10.0.0.12',RES='10.0.0.2',SRV='10.0.0.5';
+  s.dnsq(0,C,RES,'www.example.com','203.0.113.9');s.tls(.2,C,'203.0.113.9','www.example.com',3800,52000,1.6);
+  s.dnsq(3.5,C,RES,'docs.example.org','203.0.113.44');s.tls(3.7,C,'203.0.113.44','docs.example.org',2400,120000,2.4);
+  s.scan('198.51.100.66',7,SRV,Array.from({length:360},(_,i)=>i+1),28);
+  s.dnsq(26,C,RES,'mail.example.net','203.0.113.25');s.tls(26.2,C,'203.0.113.25','mail.example.net',1900,31000,1.2);
+  return s.build();}},
+ {id:'beacon',label:'Beaconing hurry-up',title:'Sample: a beaconing hurry-up',gen(){
+  const s=makeSim(9),C='10.0.0.23',RES='10.0.0.2';
+  s.dnsq(2,C,RES,'www.example.com','203.0.113.9');s.tls(2.2,C,'203.0.113.9','www.example.com',3900,61000,1.5);
+  s.dnsq(18,C,RES,'sync.cdn-example.net','192.0.2.77');
+  s.beacon(C,'192.0.2.77','sync.cdn-example.net',20,880,60);
+  s.dnsq(300,C,RES,'docs.example.org','203.0.113.44');s.tls(300.2,C,'203.0.113.44','docs.example.org',2200,88000,2.1);
+  return s.build();}}
+];
+
+/* ============================ ANALYSIS: capture -> plays ============================ */
+const PRIV=ip=>{if(ip.includes(':'))return /^(fe80|fc|fd)/i.test(ip);const a=ip.split('.').map(Number);return a[0]===10||(a[0]===172&&a[1]>=16&&a[1]<=31)||(a[0]===192&&a[1]===168)||(a[0]===169&&a[1]===254)||a[0]===127;};
+const MCAST=ip=>{if(ip.includes(':'))return /^ff/i.test(ip);const a=+ip.split('.')[0];return a>=224||ip==='255.255.255.255';};
+const BENIGN_PORTS=new Set([123,5353,1900,67,68,137,138,546,547,5355,161]);
+const SVC={443:'HTTPS',80:'HTTP',22:'SSH',445:'SMB',8443:'HTTPS-alt',3389:'RDP',21:'FTP',25:'SMTP',123:'NTP',139:'NetBIOS',9100:'print',8080:'HTTP-alt',993:'IMAPS',853:'DoT'};
+const WEBP=new Set([443,80,8443,8080,8000,8888,853]);
+const svcOf=p=>SVC[p]||('port '+p);
+const MAXP=44,MAXH=16;
+const yardsFor=b=>clamp(Math.round(Math.log10(b+1)*3.2-4),0,40);
+const LEN={pass:1.2,run:1,audible:.7,blitz:2.5,beacon:2.9,trick:1.9,flag:.95};
+
+PG.analyze=function(pk,meta){
+ meta=meta||{};
+ if(!pk.length)return null;
+ let t0=Infinity,t1=-Infinity,total=0;
+ for(const p of pk){if(p.t<t0)t0=p.t;if(p.t>t1)t1=p.t;total+=p.len;}
+ const dur=Math.max(t1-t0,.001);
+ const hosts=new Map(),hint=new Map();
+ const mk=ip=>{let h=hosts.get(ip);if(!h){h={ip,priv:PRIV(ip),bytes:0,pkts:0,first:Infinity,init:0};hosts.set(ip,h);}return h;};
+ const flows=new Map(),udpG=new Map(),icmpG=new Map(),dnsQ=[],ansIdx=new Map(),dnsCand=new Map(),resolvers=new Map();
+ const longName=n=>{const lab=n.split('.');return Math.max(...lab.map(x=>x.length))>=28||n.length>=55;};
+ for(const p of pk){
+  const s=mk(p.src),d=MCAST(p.dst)?null:mk(p.dst);
+  s.bytes+=p.len;s.pkts++;if(p.t<s.first)s.first=p.t;
+  if(d){d.bytes+=p.len;d.pkts++;if(p.t<d.first)d.first=p.t;}
+  if(p.dns){
+   const q=p.dns;
+   if(!q.qr){dnsQ.push({t:p.t,c:p.src,r:p.dst,name:q.name,ans:null,used:false});resolvers.set(p.dst,(resolvers.get(p.dst)||0)+1);
+    if(longName(q.name)){const par=q.name.split('.').slice(-2).join('.'),key=p.src+'|'+par;let c=dnsCand.get(key);if(!c){c={c:p.src,r:p.dst,par,names:new Set(),lens:0,n:0,t0:p.t,t1:p.t};dnsCand.set(key,c);}c.n++;c.lens+=Math.max(...q.name.split('.').map(x=>x.length));c.t1=p.t;if(c.names.size<400)c.names.add(q.name);}}
+   else{resolvers.set(p.src,(resolvers.get(p.src)||0)+1);const ips=q.answers.map(a=>a.ip);
+    for(const a of q.answers)if(!hint.has(a.ip))hint.set(a.ip,a.name);
+    for(let i=dnsQ.length-1,k=0;i>=0&&k<40;i--,k++){const e=dnsQ[i];if(e.c===p.dst&&e.name===q.name&&!e.ans){e.ans={t:p.t,ips};break;}}
+    for(const ip of ips){const key=p.dst+'|'+ip;let a=ansIdx.get(key);if(!a){a=[];ansIdx.set(key,a);}a.push({t:p.t,name:q.name,r:p.src,used:false});}}
+   continue;}
+  if(p.proto==='tcp'){
+   const f=p.flags,kf=p.src+':'+p.sport+'>'+p.dst+':'+p.dport,kr=p.dst+':'+p.dport+'>'+p.src+':'+p.sport;
+   let fl=flows.get(kf)||flows.get(kr);
+   if(!fl){let c=p.src,cp=p.sport,sv=p.dst,sp=p.dport;
+    const syn=(f&2)&&!(f&16);
+    if((f&2)&&(f&16)){c=p.dst;cp=p.dport;sv=p.src;sp=p.sport;}
+    else if(!syn&&p.sport<p.dport){c=p.dst;cp=p.dport;sv=p.src;sp=p.sport;}
+    fl={c,cp,s:sv,sp,t0:p.t,t1:p.t,up:0,down:0,syn:false,synack:false,ack:false,rst:0,rstFrom:null,rstEst:false,fin:false,retr:0,seen:new Set(),tSyn:0,tSa:0,name:null,mid:!syn};
+    flows.set(c+':'+cp+'>'+sv+':'+sp,fl);}
+   const up=p.src===fl.c&&p.sport===fl.cp;
+   fl.t1=p.t;if(up)fl.up+=p.len;else fl.down+=p.len;
+   if((f&2)&&!(f&16)&&up){if(fl.syn)fl.retr++;else{fl.syn=true;fl.tSyn=p.t;}}
+   else if((f&2)&&(f&16)&&!up){if(!fl.synack){fl.synack=true;fl.tSa=p.t;}}
+   else if(up&&fl.synack&&!fl.ack&&(f&16)&&!(f&4))fl.ack=true;
+   if(f&4){fl.rst++;if(fl.rstFrom==null){fl.rstFrom=up?'up':'down';fl.rstEst=fl.ack||fl.mid||fl.up+fl.down>600;}}
+   if(f&1)fl.fin=true;
+   if(p.pl>0&&!(f&2)){const k=(up?'u':'d')+p.seq;if(fl.seen.has(k))fl.retr++;else fl.seen.add(k);}
+   if(p.sni&&!fl.name)fl.name=p.sni;else if(p.host&&!fl.name)fl.name=p.host;
+   if(!fl.name&&hint.has(fl.s))fl.name=hint.get(fl.s);
+   continue;}
+  if(p.proto==='udp'){
+   if(!d)continue;
+   const sp=Math.min(p.sport,p.dport)||p.dport;
+   const ka=p.src<p.dst?p.src+'|'+p.dst:p.dst+'|'+p.src,key=ka+'|'+sp;
+   let g=udpG.get(key);if(!g){g={c:p.src,s:p.dst,port:p.sport<p.dport?p.sport:p.dport,n:0,bytes:0,t0:p.t,t1:p.t};if(p.sport<p.dport){g.c=p.dst;g.s=p.src;}udpG.set(key,g);}
+   g.n++;g.bytes+=p.len;g.t1=p.t;continue;}
+  if(p.proto==='icmp'){
+   if(!d)continue;
+   const key=p.src<p.dst?p.src+'|'+p.dst:p.dst+'|'+p.src;
+   let g=icmpG.get(key);if(!g){g={a:p.src,b:p.dst,n:0,rep:0,err:0,bytes:0,t0:p.t,t1:p.t};icmpG.set(key,g);}
+   const ty=p.icmp;if(ty===8||ty===128)g.n++;else if(ty===0||ty===129)g.rep++;else g.err++;
+   g.bytes+=p.len;g.t1=p.t;}
+ }
+ /* initiator counts */
+ const flowArr=[...flows.values()];
+ for(const fl of flowArr){const h=hosts.get(fl.c);if(h)h.init++;}
+ const nameOf=ip=>hint.get(ip)||null;
+ const plays=[];const used=new Set();
+ /* --- scans (blitz) --- */
+ const byC=new Map();
+ for(const fl of flowArr){let a=byC.get(fl.c);if(!a){a=[];byC.set(fl.c,a);}a.push(fl);}
+ for(const [c,arr] of byC){
+  const pairs=new Set();let failed=0;
+  for(const fl of arr){pairs.add(fl.s+':'+fl.sp);if(!fl.synack||fl.rstFrom==='down')failed++;}
+  if(pairs.size>=20&&failed/arr.length>=.5){
+   const tc=new Map(),open=new Set();let a0=Infinity,a1=-Infinity;
+   for(const fl of arr){tc.set(fl.s,(tc.get(fl.s)||0)+1);if(fl.synack)open.add(fl.sp);if(fl.t0<a0)a0=fl.t0;if(fl.t1>a1)a1=fl.t1;used.add(fl);}
+   const top=[...tc.entries()].sort((x,y)=>y[1]-x[1]);
+   plays.push({kind:'blitz',c,tgt:top[0][0],tgts:top.length,n:pairs.size,pct:Math.round(failed/arr.length*100),open:[...open].sort((x,y)=>x-y),t0:a0,t1:a1,bytes:arr.reduce((z,f)=>z+f.up+f.down,0),score:1e12});}}
+ /* --- beacons --- */
+ const grp=new Map();
+ for(const fl of flowArr){if(used.has(fl))continue;const k=fl.c+'|'+fl.s+'|'+fl.sp;let g=grp.get(k);if(!g){g=[];grp.set(k,g);}g.push(fl);}
+ for(const g of grp.values()){
+  if(g.length<6)continue;
+  const ts=g.map(f=>f.t0).sort((a,b)=>a-b),st=[ts[0]];for(let i=1;i<ts.length;i++)if(ts[i]-ts[i-1]>.4)st.push(ts[i]);
+  if(st.length<6)continue;
+  const iv=[];for(let i=1;i<st.length;i++)iv.push(st[i]-st[i-1]);
+  const sorted=iv.slice().sort((a,b)=>a-b),med=sorted[iv.length>>1];if(med<1)continue;
+  const near=iv.filter(x=>Math.abs(x-med)<=med*.25).length;if(near/iv.length<.8)continue;
+  if(BENIGN_PORTS.has(g[0].sp)||MCAST(g[0].s))continue;
+  const mad=iv.map(x=>Math.abs(x-med)).sort((a,b)=>a-b)[iv.length>>1]/med;
+  for(const f of g)used.add(f);
+  plays.push({kind:'beacon',c:g[0].c,s:g[0].s,port:g[0].sp,interval:med,count:st.length,jitter:mad,t0:st[0],t1:st[st.length-1],bytes:g.reduce((z,f)=>z+f.up+f.down,0),name:g.find(f=>f.name)?.name||nameOf(g[0].s),score:9e11});}
+ /* --- DNS tunnelling --- */
+ const tunnelNames=new Set();
+ for(const c of dnsCand.values()){if(c.n>=6&&c.names.size>=5){for(const n of c.names)tunnelNames.add(n);
+  plays.push({kind:'trick',sub:'dns',c:c.c,r:c.r,par:c.par,n:c.n,avg:Math.round(c.lens/c.n),t0:c.t0,t1:c.t1,bytes:c.n*180,score:8e11});}}
+ /* --- flow plays --- */
+ const ansFor=(fl)=>{const a=ansIdx.get(fl.c+'|'+fl.s);if(!a)return null;let best=null;for(const x of a){if(x.used)continue;if(x.t<=fl.t0+.6&&x.t>=fl.t0-12)best=x;}return best;};
+ for(const fl of flowArr){
+  if(used.has(fl))continue;
+  const bytes=fl.up+fl.down;
+  const pl={kind:WEBP.has(fl.sp)||fl.name?'pass':'run',c:fl.c,s:fl.s,port:fl.sp,t0:fl.t0,t1:fl.t1,bytes,up:fl.up,down:fl.down,name:fl.name||nameOf(fl.s),retr:fl.retr,score:bytes+(fl.retr?5e4:0)};
+  pl.res='ok';
+  if(!fl.synack&&fl.syn&&fl.rstFrom!=='down'){pl.res='incomplete';pl.score=3e4;}
+  else if(!fl.synack&&fl.syn&&fl.rstFrom==='down'){pl.res='refused';pl.score=3e4;}
+  else if(fl.rstFrom&&fl.rstEst&&fl.rstFrom==='down'){pl.res='fumble';pl.score+=1e5;}
+  else if(fl.retr>=2){pl.res='fumble';pl.score+=1e5;}
+  pl.hsClean=fl.syn&&fl.synack&&fl.ack&&!fl.retr;pl.rtt=fl.synack&&fl.syn?Math.max(0,fl.tSa-fl.tSyn):null;
+  pl.mid=fl.mid;
+  if(fl.up>=1e6&&fl.up>=6*fl.down&&!PRIV(fl.s)){pl.kind='trick';pl.sub='exfil';pl.score=7e11;}
+  const a=ansFor(fl);if(a){a.used=true;pl.read={name:a.name,r:a.r,ms:Math.max(0,fl.t0-a.t)*1000};pl.t0=Math.min(pl.t0,a.t);const q=dnsQ.find(e=>e.c===fl.c&&e.name===a.name&&e.ans&&e.ans.t===a.t);if(q)q.used=true;}
+  plays.push(pl);}
+ /* --- audibles (DNS with no follow-up flow) --- */
+ const ag=new Map();
+ for(const q of dnsQ){if(q.used||tunnelNames.has(q.name))continue;const k=q.c+'|'+q.name;let g=ag.get(k);if(!g){g={kind:'audible',c:q.c,r:q.r,name:q.name,n:0,ips:q.ans?q.ans.ips.slice(0,2):[],answered:!!q.ans,t0:q.t,t1:q.t,bytes:200,score:40};ag.set(k,g);}g.n++;g.t1=q.t;if(q.ans)g.answered=true;}
+ for(const g of ag.values())plays.push(g);
+ /* --- ICMP flags --- */
+ for(const g of icmpG.values()){if(g.n+g.err+g.rep===0)continue;plays.push({kind:'flag',c:g.a,s:g.b,n:Math.max(g.n,g.err?1:0,g.rep?1:0),rep:g.rep,err:g.err,t0:g.t0,t1:g.t1,bytes:g.bytes,score:2e4+g.n*10});}
+ /* --- UDP runs --- */
+ for(const g of udpG.values()){if(g.n<1)continue;plays.push({kind:'run',proto:'udp',c:g.c,s:g.s,port:g.port,n:g.n,t0:g.t0,t1:g.t1,bytes:g.bytes,score:g.bytes,res:'ok'});}
+ if(!plays.length)return null;
+ const nDroppedA=Math.max(0,plays.length-MAXP);
+ plays.sort((a,b)=>b.score-a.score);
+ let kept=plays.slice(0,MAXP);
+ /* hosts to show */
+ const hv=new Map();
+ const touch=(pl)=>{const l=[pl.c,pl.s||pl.tgt,pl.r&&pl.kind!=='pass'?pl.r:(pl.read?pl.read.r:null),pl.b].filter(Boolean);return l;};
+ const pbytes=new Map();
+ for(const pl of kept)for(const ip of [pl.c,pl.s||pl.tgt||pl.r,pl.read&&pl.read.r]){if(ip)pbytes.set(ip,(pbytes.get(ip)||0)+Math.min(pl.score,1e9)+1);}
+ const hostRank=[...pbytes.entries()].sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+ const show=new Set(hostRank.slice(0,MAXH));
+ for(const pl of kept)if(pl.score>=1e11){show.add(pl.c);const o=pl.s||pl.tgt||pl.r;if(o)show.add(o);}
+ const keep2=kept.filter(pl=>show.has(pl.c)&&(!(pl.s||pl.tgt||pl.r)||show.has(pl.s||pl.tgt||pl.r)));
+ const dropped=plays.length-keep2.length;
+ kept=keep2;
+ if(!kept.length)return null;
+ kept.sort((a,b)=>a.t0-b.t0);
+ /* roles */
+ const scanPlay=kept.find(p=>p.kind==='blitz');
+ let qb=null;
+ if(scanPlay)qb=scanPlay.tgt;
+ else{let best=-1;for(const ip of show){const h=hosts.get(ip);if(!h)continue;const sc=h.init*(h.priv?1000:1)+h.bytes/1e9;if(sc>best){best=sc;qb=ip;}}}
+ let res=null;{let rb=-1;for(const [ip,n] of resolvers)if(show.has(ip)&&n>rb&&ip!==qb){rb=n;res=ip;}}
+ const hl=[];
+ for(const ip of show){const h=hosts.get(ip);hl.push({ip,priv:h.priv,bytes:h.bytes,pkts:h.pkts,name:nameOf(ip),first:h.first,role:ip===qb?'qb':ip===res?'res':h.priv?'off':'def',rusher:!!kept.find(p=>p.kind==='blitz'&&p.c===ip)});}
+ /* layout in field coords (120 x 60) */
+ const hm=new Map(hl.map(h=>[h.ip,h]));
+ const qbh=hm.get(qb);if(qbh){qbh.x=40;qbh.y=30;}
+ const resh=res?hm.get(res):null;if(resh){resh.x=24;resh.y=52;}
+ const offs=hl.filter(h=>h.role==='off').sort((a,b)=>a.first-b.first);
+ const oy=[12,48,20,40,8,53,26,34];offs.forEach((h,i)=>{h.x=(i<2?30:i<4?24:i<6?34:20)+((i%2)?2:0);h.y=oy[i%oy.length];if(i>=8){h.x=14;h.y=10+(i-8)*7;}});
+ const defs=hl.filter(h=>h.role==='def').sort((a,b)=>a.first-b.first);
+ const cols=Math.max(1,Math.ceil(defs.length/5)),per=Math.ceil(defs.length/cols);
+ defs.forEach((h,i)=>{const col=Math.floor(i/per),row=i%per,cnt=Math.min(per,defs.length-col*per);h.x=(cols===1?84:68+col*(36/(cols-1)||0))+((row%2)?4:0);h.y=cnt===1?30:9+row*(42/(cnt-1))+col*2;if(h.rusher){h.x=Math.min(h.x,76);}});
+ /* timeline + down & distance */
+ let T=0,ball=25,down=1,dist=10,score=0,flags=0,turnovers=0,fumbles=0;
+ let seq=0;
+ for(const pl of kept){
+  pl.id=++seq;pl.a=hm.get(pl.c);pl.b=hm.get(pl.s||pl.tgt||pl.r);pl.r2=pl.read?hm.get(pl.read.r):pl.kind==='audible'?hm.get(pl.r):null;
+  pl.len=(LEN[pl.kind]||1)+(pl.read?.3:0)+(pl.res&&pl.res!=='ok'?.1:0);pl.s0=T;T+=pl.len;
+  if(pl.kind==='audible'){pl.lab='PRE-SNAP';pl.yds=0;pl.b0=pl.b1=ball;pl.call='AUDIBLE';pl.w=1;pl.short=(pl.answered?'':'no reply');continue;}
+  pl.lab=ORD[down-1]+' & '+dist;pl.b0=ball;
+  let y=0,call='';
+  if(pl.kind==='pass'||pl.kind==='run'){
+   y=yardsFor(pl.bytes);
+   if(pl.res==='incomplete'){y=0;call='INCOMPLETE';flags++;}
+   else if(pl.res==='refused'){y=-2;call='INCOMPLETE';flags++;}
+   else if(pl.res==='fumble'){y=Math.max(-5,3-pl.retr*3);call='FUMBLE';fumbles++;flags++;}
+   else if(pl.retr){y=Math.max(0,y-3*pl.retr);flags+=pl.retr;call='FLAG';}
+   pl.w=clamp(1.6+Math.log10(pl.bytes+1)*.55,1.6,6.2);}
+  else if(pl.kind==='blitz'){y=-Math.min(15,4+Math.floor(pl.n/60));call='SACK';flags++;pl.w=2;}
+  else if(pl.kind==='beacon'){y=Math.min(12,pl.count);call='NO-HUDDLE';pl.w=2.4;}
+  else if(pl.kind==='trick'){y=pl.sub==='dns'?15:25;call='TRICK PLAY';flags++;pl.w=4;}
+  else if(pl.kind==='flag'){y=(pl.rep?0:-5);call=pl.rep?'TIMEOUT':'FLAG';if(!pl.rep)flags++;pl.w=1.8;}
+  else{y=yardsFor(pl.bytes);pl.w=clamp(1.6+Math.log10(pl.bytes+1)*.5,1.6,5.5);}
+  pl.yds=y;ball=clamp(ball+y,1,100);
+  if(ball>=100){call='TOUCHDOWN';score+=7;ball=25;down=1;dist=10;}
+  else if(y>=dist){down=1;dist=10;call=call||'FIRST DOWN';}
+  else{down++;dist=Math.max(1,dist-y);if(down>4){call='TURNOVER ON DOWNS';turnovers++;down=1;dist=10;ball=Math.max(ball,25);}}
+  pl.call=call;pl.b1=ball;
+  pl.short=(y>0?'+':'')+y+' yd · '+(pl.kind==='blitz'?'x'+fmtN(pl.n)+' ports':pl.kind==='beacon'?'x'+pl.count+' @ '+fmtI(pl.interval):fmtB(pl.bytes));
+ }
+ for(const pl of kept)pl.text=say(pl,hm);
+ /* verdict + scoreboard */
+ const verdict=judge(kept,hm,hl,{flags,total,dur});
+ const mv=hl.slice().sort((a,b)=>b.bytes-a.bytes)[0];
+ const spans=kept.map(p=>p.t1).concat([t1]);
+ return{t0,t1,dur,T,plays:kept,hosts:hl,hostMap:hm,qb,res,packets:pk.length,bytes:total,nHosts:hosts.size,dropped:dropped,flags,turnovers,fumbles,score,mvp:mv,verdict,label:meta.label||'capture',synthetic:!!meta.synthetic,fmt:meta.fmt||'',skipped:meta.skipped||0,warnings:meta.warnings||[]};};
+function fmtI(s){return (s<10?s.toFixed(1):Math.round(s))+'s';}
+function say(pl,hm){
+ const lab=pl.lab,A=pl.c,Bn=pl.s||pl.tgt||pl.r;
+ const nm=pl.name?' ('+pl.name+')':'';
+ if(pl.kind==='audible')return 'Pre-snap read: '+A+' asks '+pl.r+' for '+pl.name+(pl.answered?(pl.ips&&pl.ips[0]?' and hears '+pl.ips[0]:''):' (no answer)')+(pl.n>1?' x'+pl.n:'')+'.';
+ if(pl.kind==='pass'||pl.kind==='run'){
+  const pre=pl.read?'Audible: '+A+' checks '+pl.read.name+' with '+pl.read.r+' ('+Math.round(pl.read.ms)+' ms). ':'';
+  const verb=pl.kind==='pass'?'snaps to':'runs it up the middle to';
+  const tgt=Bn+':'+pl.port+(pl.kind==='run'?' ('+svcOf(pl.port)+')':'')+nm;
+  if(pl.proto==='udp')return lab+': '+A+' keeps it on the ground to '+Bn+':'+pl.port+' ('+svcOf(pl.port)+'), '+fmtN(pl.n)+' UDP packets, '+fmtB(pl.bytes)+' gained.';
+  if(pl.res==='incomplete')return lab+': '+pre+A+' snaps to '+tgt+', no answer from the defense: incomplete pass.';
+  if(pl.res==='refused')return lab+': '+pre+A+' snaps to '+tgt+', door slammed (RST): incomplete pass.';
+  const hs='3-way handshake '+(pl.mid?'missed (capture joined mid-play)':pl.hsClean?'clean':'wobbly')+(pl.rtt!=null&&!pl.mid?' ('+Math.max(1,Math.round(pl.rtt*1000))+' ms)':'');
+  if(pl.res==='fumble')return lab+': '+pre+A+' '+verb+' '+tgt+', '+hs+', '+fmtB(pl.bytes)+' moved, then FUMBLE: '+(pl.retr?pl.retr+' retransmit'+(pl.retr>1?'s':'')+(pl.retr?' and ':''):'')+'the drive ended in a reset.';
+  return lab+': '+pre+A+' '+verb+' '+tgt+', '+hs+', '+fmtB(pl.bytes)+' gained'+(pl.retr?', flag on the play ('+pl.retr+' retransmit'+(pl.retr>1?'s':'')+')':'')+'.';}
+ if(pl.kind==='blitz')return lab+': BLITZ! '+A+' sends '+fmtN(pl.n)+' rushers at '+pl.tgt+(pl.tgts>1?' and '+(pl.tgts-1)+' more':'')+(pl.open.length?'; it finds '+pl.open.length+' gap'+(pl.open.length>1?'s':'')+' (open: '+pl.open.slice(0,5).join(', ')+(pl.open.length>5?'...':'')+')':'')+'; '+pl.pct+'% of snaps stuffed at the line.';
+ if(pl.kind==='beacon')return lab+': Hurry-up offense: '+A+' runs the same play to '+Bn+':'+pl.port+(pl.name?' ('+pl.name+')':'')+' '+pl.count+' times, '+fmtI(pl.interval)+' apart, no huddle.';
+ if(pl.kind==='trick'&&pl.sub==='dns')return lab+': Trick play! '+A+' sends '+fmtN(pl.n)+' oddly long DNS names under '+pl.par+' to '+pl.r+'. Smells like a handoff hidden inside DNS.';
+ if(pl.kind==='trick')return lab+': Trick play! '+A+' heaves '+fmtB(pl.up)+' out to '+Bn+':'+pl.port+nm+' with almost nothing coming back.';
+ if(pl.kind==='flag')return lab+': '+(pl.rep?'Timeout called: ':'Flag on the play: ')+A+' pings '+Bn+' '+pl.n+'x'+(pl.err?', answered with an error':pl.rep?', '+pl.rep+' answered':', no reply: timeout')+'.';
+ return lab;}
+function judge(plays,hm,hl,st){
+ const by=k=>plays.filter(p=>p.kind===k);
+ const sc=by('blitz')[0],tn=plays.find(p=>p.kind==='trick'&&p.sub==='dns'),bc=by('beacon')[0],ex=plays.find(p=>p.sub==='exfil');
+ const also=[];
+ if(sc)also.push(['r','blitz']);if(tn)also.push(['r','DNS trick play']);if(bc)also.push(['a','hurry-up beacon']);if(ex)also.push(['a','big outbound']);
+ const fl=plays.filter(p=>p.kind==='flag').length,fm=plays.filter(p=>p.res==='fumble').length,inc=plays.filter(p=>p.res==='incomplete'||p.res==='refused').length;
+ if(fm)also.push(['a',fm+' fumble'+(fm>1?'s':'')]);if(inc)also.push(['a',inc+' incomplete']);if(fl)also.push(['a',fl+' timeout flag'+(fl>1?'s':'')]);
+ const mk=(tone,title,detail,key)=>({tone,title,detail,also:also.filter(a=>a[1]!==key),tag:null});
+ if(sc)return mk('r','Port-scan blitz from '+sc.c,sc.c+' knocked on '+fmtN(sc.n)+' ports on '+sc.tgt+(sc.tgts>1?' and '+(sc.tgts-1)+' more host'+(sc.tgts>2?'s':''):'')+'; '+sc.pct+'% got no welcome and '+sc.open.length+' door'+(sc.open.length===1?'':'s')+' answered'+(sc.open.length?' ('+sc.open.slice(0,5).join(', ')+')':'')+'. Classic reconnaissance. Check what '+sc.tgt+' exposes.','blitz');
+ if(tn)return mk('r','Trick play: DNS tunnelling-like traffic',tn.c+' sent '+fmtN(tn.n)+' oddly long names under '+tn.par+' (labels around '+tn.avg+' characters). Data may be riding inside DNS queries. Heuristic, verify before acting.','DNS trick play');
+ if(bc)return mk('a','Possible beacon: hurry-up offense every '+fmtI(bc.interval),bc.c+' calls '+bc.s+':'+bc.port+(bc.name?' ('+bc.name+')':'')+' '+bc.count+' times, '+fmtI(bc.interval)+' apart, steady within '+Math.max(1,Math.round(bc.jitter*100))+'%. Machine-like timing is common to implants and to harmless sync agents. Check the destination.','hurry-up beacon');
+ if(ex)return mk('a','Trick play: large outbound haul',ex.c+' sent '+fmtB(ex.up)+' to '+ex.s+(ex.name?' ('+ex.name+')':'')+' with almost nothing coming back. Backups and uploads look like this too.','big outbound');
+ if(st.flags>=3)return mk('a','Sloppy drive: fumbles and flags',fm+' fumble'+(fm===1?'':'s')+', '+inc+' incomplete pass'+(inc===1?'':'es')+', '+fl+' timeout flag'+(fl===1?'':'s')+'. Retransmits and resets suggest a lossy path or a flaky server, not an attack.','');
+ const web=plays.filter(p=>p.kind==='pass').length;
+ if(web)return mk('g','Looks like a normal web fetch',web+' pass'+(web>1?'es':'')+' to the web, handshakes mostly clean, no scans, beacons or tunnelling in the film.'+(st.flags?' A couple of flags, nothing alarming.':''),'');
+ return mk('g','Routine drive','Nothing in this capture trips the scan, beacon or tunnelling checks.','');}
+
+/* ============================ RENDER ============================ */
+const RMQ=window.matchMedia('(prefers-reduced-motion: reduce)');
+const COL={pass:'#34e3b0',run:'#7ad7ff',audible:'#b9afff',blitz:'#ff5d73',beacon:'#ffb86b',trick:'#ff7ab8',flag:'#ffe066',snap:'#22d3ee',bad:'#ff8b96'};
+function colOf(pl){if(pl.res==='fumble'||pl.res==='incomplete'||pl.res==='refused')return COL.bad;return COL[pl.kind]||COL.pass;}
+const cv=$('cv'),cx=cv.getContext('2d');
+const S={m:null,f:0,playing:false,speed:1,W:0,H:0,dpr:1,vert:false,cur:-1,dirty:true,last:0};
+const fieldEl=$('field');
+
+function ease(t){t=clamp(t,0,1);return t*t*(3-2*t);}
+function arcPts(A,B,bend){const mx=(A[0]+B[0])/2,my=(A[1]+B[1])/2,dx=B[0]-A[0],dy=B[1]-A[1];const L=Math.hypot(dx,dy)||1;const cx2=mx-dy/L*bend*L,cy2=my+dx/L*bend*L;const pts=[];for(let i=0;i<=30;i++){const t=i/30,q=1-t;pts.push([q*q*A[0]+2*q*t*cx2+t*t*B[0],q*q*A[1]+2*q*t*cy2+t*t*B[1]]);}return pts;}
+function lenPts(pts){let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);return L;}
+function part(pts,u){if(u>=1)return pts;if(u<=0)return [pts[0]];const Ls=[0];for(let i=1;i<pts.length;i++)Ls.push(Ls[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));const T=Ls[Ls.length-1]*u;const out=[pts[0]];for(let i=1;i<pts.length;i++){if(Ls[i]<=T)out.push(pts[i]);else{const k=(T-Ls[i-1])/(Ls[i]-Ls[i-1]||1);out.push([pts[i-1][0]+(pts[i][0]-pts[i-1][0])*k,pts[i-1][1]+(pts[i][1]-pts[i-1][1])*k]);break;}}return out;}
+function atU(pts,u){const p=part(pts,clamp(u,0,1));const n=p.length;if(n<2)return{p:p[0],a:0};const a=Math.atan2(p[n-1][1]-p[n-2][1],p[n-1][0]-p[n-2][0]);return{p:p[n-1],a};}
+function trim(A,B,ra,rb){const dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy)||1;return[[A[0]+dx/L*ra,A[1]+dy/L*ra],[B[0]-dx/L*rb,B[1]-dy/L*rb]];}
+function strokeP(c,pts){if(pts.length<2)return;c.beginPath();c.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)c.lineTo(pts[i][0],pts[i][1]);c.stroke();}
+function head(c,pts,sz){const n=pts.length;if(n<2)return;const e=pts[n-1];let q=pts[n-2],k=n-2;while(k>0&&Math.hypot(e[0]-q[0],e[1]-q[1])<2){k--;q=pts[k];}const a=Math.atan2(e[1]-q[1],e[0]-q[0]);c.save();c.translate(e[0],e[1]);c.rotate(a);c.beginPath();c.moveTo(0,0);c.lineTo(-sz,-sz*.62);c.lineTo(-sz*.7,0);c.lineTo(-sz,sz*.62);c.closePath();c.fill();c.restore();}
+function pill(c,x,y,text,col,u,o){o=o||{};c.save();c.font='600 '+Math.max(10,11*u)+'px Inter,system-ui,sans-serif';const w=c.measureText(text).width+16*u,h=21*u;let px=x-w/2,py=y-h/2;if(o.W){px=clamp(px,6,o.W-w-6);py=clamp(py,6,o.H-h-6);}c.fillStyle='rgba(6,10,14,.82)';c.strokeStyle=col;c.lineWidth=1.2;c.beginPath();c.roundRect(px,py,w,h,h/2);c.fill();c.stroke();c.fillStyle='#fff';c.textAlign='center';c.textBaseline='middle';c.fillText(text,px+w/2,py+h/2+.5);c.restore();}
+function flag(c,x,y,u,col,a){c.save();c.globalAlpha*=a;c.strokeStyle='#fff';c.lineWidth=2*u;c.lineCap='round';c.beginPath();c.moveTo(x,y);c.lineTo(x,y-26*u);c.stroke();c.fillStyle=col;c.beginPath();c.moveTo(x,y-26*u);c.lineTo(x+17*u,y-21*u);c.lineTo(x,y-15*u);c.closePath();c.fill();c.restore();}
+
+function boardRect(W,H,u){const pad=10*u;return{pad,fw:W-2*pad,fh:H-2*pad};}
+function drawBoard(c,W,H,f,o){
+ const m=S.m;o=o||{};const vert=!!o.vert;
+ const u=o.u||(vert?clamp(W/430,.7,1.6):clamp(W/900,.55,1.9));
+ const {pad,fw,fh}=boardRect(W,H,u);
+ const pt=(fx,fy)=>vert?[pad+fy/60*fw,pad+fx/120*fh]:[pad+fx/120*fw,pad+fy/60*fh];
+ const rect=(x0,y0,x1,y1)=>{const a=pt(x0,y0),b=pt(x1,y1);return[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.abs(b[0]-a[0]),Math.abs(b[1]-a[1])];};
+ const ln=(x0,y0,x1,y1)=>{const a=pt(x0,y0),b=pt(x1,y1);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();};
+ c.save();
+ /* backdrop */
+ const bg=c.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#0b3b2e');bg.addColorStop(1,'#07261f');c.fillStyle=bg;c.fillRect(0,0,W,H);
+ c.save();c.beginPath();c.roundRect(pad,pad,fw,fh,16*u);c.clip();
+ const fg=c.createLinearGradient(0,pad,0,pad+fh);fg.addColorStop(0,'#10503c');fg.addColorStop(1,'#0a3a2c');c.fillStyle=fg;c.fillRect(pad,pad,fw,fh);
+ for(let k=0;k<10;k++){if(k%2===0)continue;const r=rect(10+k*10,0,20+k*10,60);c.fillStyle='rgba(255,255,255,.035)';c.fillRect(r[0],r[1],r[2],r[3]);}
+ let r=rect(0,0,10,60);c.fillStyle='rgba(52,227,176,.16)';c.fillRect(r[0],r[1],r[2],r[3]);
+ r=rect(110,0,120,60);c.fillStyle='rgba(255,184,107,.14)';c.fillRect(r[0],r[1],r[2],r[3]);
+ c.lineCap='round';
+ for(let fx=10;fx<=110;fx+=5){c.strokeStyle='rgba(255,255,255,'+(fx%10===0?.34:.16)+')';c.lineWidth=(fx%10===0?1.8:1)*u;ln(fx,0,fx,60);}
+ c.strokeStyle='rgba(255,255,255,.3)';c.lineWidth=1.4*u;
+ for(let fx=11;fx<110;fx++){if(fx%5===0)continue;ln(fx,0,fx,1.6);ln(fx,58.4,fx,60);ln(fx,23,fx,24.6);ln(fx,35.4,fx,37);}
+ /* numbers + endzone text */
+ c.fillStyle='rgba(255,255,255,.085)';c.textAlign='center';c.textBaseline='middle';c.font='700 '+(vert?21*u:24*u)+'px "Space Grotesk",system-ui,sans-serif';
+ for(let k=1;k<=9;k++){const fx=10+k*10,v=k<=5?k*10:(10-k)*10;for(const fy of [10.5,49.5]){const p=pt(fx,fy);c.fillText(String(v),p[0],p[1]);}}
+ c.font='700 '+(vert?15*u:15*u)+'px "Space Grotesk",system-ui,sans-serif';c.fillStyle='rgba(255,255,255,.26)';
+ const ez=(fx,txt)=>{const p=pt(fx,30);c.save();c.translate(p[0],p[1]);if(!vert)c.rotate(-Math.PI/2);c.fillText(txt,0,0);c.restore();};
+ ez(5,'HOME NETWORK');ez(115,'THE INTERNET');
+ /* LOS and first down */
+ const first=m&&m.plays.length?m.plays[0]:null;
+ let cur=-1;if(m){for(let i=0;i<m.plays.length;i++){if(f>=m.plays[i].s0)cur=i;}}
+ let spot=25,dist=10,lab='1st & 10';
+ if(m&&cur>=0){const pl=m.plays[cur];const p=clamp((f-pl.s0)/pl.len,0,1);spot=lerp(pl.b0,pl.b1,ease((p-.55)/.45));lab=pl.lab;const mm=/&\s*(\d+)/.exec(pl.lab);dist=mm?+mm[1]:10;if(p>=1||(p>.55&&pl.call==='FIRST DOWN'))dist=10;}
+ else if(m){dist=10;}
+ const losx=10+spot;
+ c.shadowColor='#ffd45e';c.shadowBlur=10*u;c.strokeStyle='#ffd45e';c.lineWidth=3*u;ln(losx,0,losx,60);
+ c.shadowColor='#22d3ee';c.strokeStyle='#22d3ee';c.lineWidth=2.4*u;const fdx=Math.min(losx+dist,119);ln(fdx,0,fdx,60);c.shadowBlur=0;
+ c.restore();
+ /* sidelines border */
+ c.strokeStyle='rgba(255,255,255,.55)';c.lineWidth=2*u;c.beginPath();c.roundRect(pad,pad,fw,fh,16*u);c.stroke();
+ if(!m){c.restore();return;}
+ /* plays */
+ const doneA=o.doneAlpha==null?.34:o.doneAlpha;
+ const hot=new Set();let ballPos=null,ballAng=0,ballU=0;
+ const P=(h)=>pt(h.x,h.y);
+ const tr=13*u;
+ for(let i=0;i<m.plays.length;i++){const pl=m.plays[i];if(i>cur)continue;
+  const p=i===cur?clamp((f-pl.s0)/pl.len,0,1):1;
+  const isCur=i===cur&&p<1;
+  c.save();c.globalAlpha=isCur?1:doneA;
+  const bp=drawPlay(c,pl,p,isCur,P,u,tr,W,H);
+  c.restore();
+  if(isCur){hot.add(pl.a);hot.add(pl.b);if(pl.r2)hot.add(pl.r2);if(bp){ballPos=bp.p;ballAng=bp.a;}}}
+ /* tokens */
+ for(const h of m.hosts)drawToken(c,h,P(h),u,hot.has(h),W,H,f,cur>=0&&m.plays[cur]&&m.plays[cur].kind==='blitz'&&m.plays[cur].b===h&&hot.has(h));
+ /* ball */
+ const qp=P(m.hostMap.get(m.qb));
+ const bpos=ballPos||[qp[0]+tr*1.35,qp[1]+tr*.6];
+ c.save();c.translate(bpos[0],bpos[1]);c.rotate(ballPos?ballAng:-.5);c.fillStyle='#b4693a';c.strokeStyle='rgba(0,0,0,.5)';c.lineWidth=1;c.beginPath();c.ellipse(0,0,8.5*u,5.2*u,0,0,Math.PI*2);c.fill();c.stroke();c.strokeStyle='#fff';c.lineWidth=1.2*u;c.beginPath();c.moveTo(-3*u,0);c.lineTo(3*u,0);for(let k=-2;k<=2;k++){c.moveTo(k*1.4*u,-1.8*u);c.lineTo(k*1.4*u,1.8*u);}c.stroke();c.restore();
+ /* HUD */
+ const pl=cur>=0?m.plays[cur]:null;
+ const spotTxt=spot<=50?'OWN '+Math.round(spot):'OPP '+Math.round(100-spot);
+ const hudTxt=(pl?pl.lab:'KICKOFF')+'  ·  '+(pl&&pl.kind==='audible'?'':'BALL ON '+spotTxt);
+ c.save();c.font='700 '+Math.max(11,13*u)+'px "Space Grotesk",system-ui,sans-serif';
+ const hw=c.measureText(hudTxt).width+22*u,hh=26*u,hx=pad+10*u,hy=pad+10*u;
+ c.fillStyle='rgba(6,8,14,.78)';c.strokeStyle='rgba(255,212,94,.7)';c.lineWidth=1.3;c.beginPath();c.roundRect(hx,hy,hw,hh,hh/2);c.fill();c.stroke();
+ c.fillStyle='#fff';c.textAlign='left';c.textBaseline='middle';c.fillText(hudTxt,hx+11*u,hy+hh/2+.5);
+ const rt=(cur>=0?'PLAY '+(cur+1)+'/'+m.plays.length+'  ·  '+fmtRel((pl?pl.t0:m.t0)-m.t0):'PLAY 0/'+m.plays.length);
+ c.font='600 '+Math.max(10,11.5*u)+'px ui-monospace,Menlo,Consolas,monospace';const rw=c.measureText(rt).width+22*u;
+ if(hx+hw+rw+16*u<W-pad){c.fillStyle='rgba(6,8,14,.78)';c.strokeStyle='rgba(255,255,255,.28)';c.beginPath();c.roundRect(W-pad-10*u-rw,hy,rw,hh,hh/2);c.fill();c.stroke();c.fillStyle='#e8eefc';c.textAlign='center';c.fillText(rt,W-pad-10*u-rw/2,hy+hh/2+.5);}
+ c.restore();
+ /* banner */
+ if(pl&&pl.call&&pl.kind!=='audible'){const p=clamp((f-pl.s0)/pl.len,0,1);const a=Math.sin(clamp((p-.45)/.5,0,1)*Math.PI);if(a>.02&&(f<m.T)){c.save();c.globalAlpha=Math.min(1,a*1.6);c.font='italic 700 '+(vert?26*u:34*u)+'px "Space Grotesk",system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';const bc=pl.call==='TOUCHDOWN'?'#ffd45e':colOf(pl);const bx=W/2,by=pad+(vert?70*u:62*u)+(1-a)*-8*u;c.lineWidth=7*u;c.strokeStyle='rgba(3,12,9,.85)';c.lineJoin='round';c.strokeText(pl.call,bx,by);c.fillStyle=bc;c.fillText(pl.call,bx,by);c.restore();}}
+ c.restore();
+}
+function drawToken(c,h,p,u,hot,W,H,f,shake){
+ const r=13*u;let x=p[0],y=p[1];
+ if(shake&&!RMQ.matches){x+=Math.sin(f*40)*2.2*u;}
+ c.save();c.lineCap='round';c.lineJoin='round';
+ if(hot){const k=.5+.5*Math.sin(f*7);c.fillStyle='rgba(255,212,94,'+(.14+.1*k)+')';c.beginPath();c.arc(x,y,r*2.1,0,7);c.fill();}
+ c.shadowColor='rgba(0,0,0,.55)';c.shadowBlur=6*u;
+ if(h.role==='qb'){c.fillStyle='#34e3b0';c.beginPath();c.arc(x,y,r*1.15,0,7);c.fill();c.shadowBlur=0;c.fillStyle='#06140f';c.font='700 '+Math.max(9.5,11*u)+'px "Space Grotesk",system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText('QB',x,y+.5);}
+ else if(h.role==='res'){c.shadowBlur=0;c.fillStyle='rgba(185,175,255,.2)';c.strokeStyle='#b9afff';c.lineWidth=2.2*u;c.beginPath();c.roundRect(x-r*1.05,y-r*.8,r*2.1,r*1.6,5*u);c.fill();c.stroke();c.fillStyle='#e6e1ff';c.font='700 '+Math.max(9,10*u)+'px "Space Grotesk",system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText('DNS',x,y+.5);}
+ else if(h.role==='off'){c.strokeStyle='#eaf4ff';c.lineWidth=2.6*u;c.beginPath();c.arc(x,y,r,0,7);c.stroke();}
+ else{c.strokeStyle=h.rusher?'#ff5d73':'#ffb0bd';c.lineWidth=3*u;c.beginPath();c.moveTo(x-r*.9,y-r*.9);c.lineTo(x+r*.9,y+r*.9);c.moveTo(x+r*.9,y-r*.9);c.lineTo(x-r*.9,y+r*.9);c.stroke();}
+ c.shadowBlur=0;
+ const fs=Math.max(9.5,10.5*u);const l1=h.name&&h.role!=='qb'?trunc(h.name,W<500?14:22):h.ip,l2=h.name&&h.role!=='qb'?h.ip:(h.name?trunc(h.name,22):'');
+ c.textAlign='center';c.textBaseline='top';c.font='600 '+fs+'px Inter,system-ui,sans-serif';
+ let ty=y+r*1.45;if(ty+fs*2.2>H-4)ty=y-r*1.45-fs*(l2?2.3:1.2);
+ const tw=Math.max(c.measureText(l1).width,l2?c.measureText(l2).width:0);const tx=clamp(x,tw/2+6,W-tw/2-6);
+ c.fillStyle='rgba(4,14,11,.72)';c.beginPath();c.roundRect(tx-tw/2-4,ty-2,tw+8,fs*(l2?2.25:1.25)+3,5);c.fill();
+ c.fillStyle='#fff';c.fillText(l1,tx,ty);
+ if(l2){c.font='500 '+(fs*.88)+'px ui-monospace,Menlo,Consolas,monospace';c.fillStyle='#b9c6dc';c.fillText(l2,tx,ty+fs*1.12);}
+ c.restore();}
+function drawPlay(c,pl,p,isCur,P,u,tr,W,H){
+ const A0=P(pl.a),B0=pl.b?P(pl.b):A0,col=colOf(pl);
+ c.lineCap='round';c.lineJoin='round';
+ let ball=null,mid=null;
+ const lw=(pl.w||2)*u;
+ if(pl.kind==='audible'){
+  const R0=pl.r2?P(pl.r2):B0;const [a,b]=trim(A0,R0,tr,tr*1.4);const pts=arcPts(a,b,-.2);
+  c.strokeStyle=COL.audible;c.fillStyle=COL.audible;c.lineWidth=2*u;c.setLineDash([6*u,5*u]);const pp=part(pts,ease(p/.7));strokeP(c,pp);c.setLineDash([]);if(p>.5||!isCur)head(c,pp,9*u);
+  mid=pts[15];if(isCur)pill(c,mid[0],mid[1]-16*u,'audible · '+(pl.short||pl.name),COL.audible,u,{W,H});
+  return null;}
+ if(pl.kind==='blitz'){
+  const K=Math.min(16,7+Math.floor(pl.n/40));const T=B0;
+  for(let j=0;j<K;j++){const ang=-Math.PI*.9+(j/(K-1))*Math.PI*.8+Math.PI*.05*Math.sin(j*2.3);const rr=(20+((j*37)%11)*2.2)*u;const end=[T[0]+Math.cos(ang+Math.PI)*0+Math.cos(ang)*rr*.0+ (j%2?1:-1)*0,T[1]];
+   const tgtp=[T[0]+(Math.cos(ang)*-1)*(tr*1.6)+(j%3-1)*tr*.7,T[1]+Math.sin(ang)*tr*1.9];
+   const st=(j/K)*.62,uu=ease((p-st)/.34);if(uu<=0)continue;
+   const from=[A0[0]+(j%4-1.5)*3*u,A0[1]+(j-K/2)*(tr*.55)];
+   const pts=arcPts(from,tgtp,(j%2?.06:-.06));c.strokeStyle=COL.blitz;c.fillStyle=COL.blitz;c.lineWidth=1.7*u;const pp=part(pts,uu);strokeP(c,pp);head(c,pp,6.5*u);}
+  if(isCur){const k=(p*5)%1;c.strokeStyle='rgba(255,93,115,'+(.7*(1-k))+')';c.lineWidth=2.4*u;c.beginPath();c.arc(T[0],T[1],tr*(1.3+k*2.2),0,7);c.stroke();
+   pill(c,A0[0],A0[1]-tr*2.1,'x'+fmtN(pl.n)+' ports',COL.blitz,u,{W,H});mid=T;pill(c,T[0],T[1]-tr*2.4,pl.short,COL.blitz,u,{W,H});}
+  return null;}
+ if(pl.kind==='beacon'){
+  const [a,b]=trim(A0,B0,tr,tr*1.4);const pts=arcPts(a,b,.16);
+  c.strokeStyle=COL.beacon;c.fillStyle=COL.beacon;c.lineWidth=2*u;c.setLineDash([8*u,6*u]);strokeP(c,part(pts,ease(p/.2)));c.setLineDash([]);
+  const K=Math.min(pl.count,12);let shown=0;
+  for(let j=0;j<K;j++){const st=.12+(j/K)*.8,uu=clamp((p-st)/.12,0,1.001);if(uu<=0)continue;shown=j+1;const o2=atU(pts,uu);if(uu<1){c.globalAlpha*=1;c.beginPath();c.arc(o2.p[0],o2.p[1],4.6*u,0,7);c.fill();}else{const q=atU(pts,.5+((j%3)-1)*.09);c.fillRect(q.p[0]-1.5*u,q.p[1]-5*u,3*u,10*u);}}
+  head(c,part(pts,1),9*u);mid=pts[15];
+  if(isCur){const beat=Math.min(pl.count,Math.max(1,Math.round(clamp((p-.12)/.8,0,1)*pl.count)));pill(c,mid[0],mid[1]-18*u,'no-huddle · snap '+beat+'/'+pl.count+' · every '+fmtI(pl.interval),COL.beacon,u,{W,H});}
+  else{pill(c,mid[0],mid[1]-16*u,'x'+pl.count+' every '+fmtI(pl.interval),COL.beacon,u,{W,H});}
+  return null;}
+ if(pl.kind==='trick'){
+  const [a,b]=trim(A0,B0,tr,tr*1.5);const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy)||1,nx=-dy/L,ny=dx/L;
+  const pts=[a];const Z=pl.sub==='dns'?7:4;for(let i=1;i<Z*2;i++){const t=i/(Z*2),s=(i%2?1:-1)*14*u;pts.push([a[0]+dx*t+nx*s,a[1]+dy*t+ny*s]);}pts.push(b);
+  const pp=part(pts,ease(p/.9));c.strokeStyle=COL.trick;c.fillStyle=COL.trick;c.lineWidth=Math.max(2.4*u,lw*.8);strokeP(c,pp);head(c,pp,10*u);
+  const o2=atU(pts,ease(p/.9));ball={p:o2.p,a:o2.a};
+  mid=pts[Math.floor(pts.length/2)];if(isCur)pill(c,mid[0],mid[1]-20*u,'TRICK · '+(pl.sub==='dns'?fmtN(pl.n)+' long names':fmtB(pl.up)+' out'),COL.trick,u,{W,H});
+  return ball;}
+ if(pl.kind==='flag'){
+  const [a,b]=trim(A0,B0,tr,tr*1.4);const pts=arcPts(a,b,.14);
+  c.strokeStyle=COL.flag;c.fillStyle=COL.flag;c.lineWidth=1.8*u;c.setLineDash([3*u,6*u]);const pp=part(pts,ease(p/.6));strokeP(c,pp);c.setLineDash([]);head(c,pp,8*u);
+  if(p>.55||!isCur)flag(c,B0[0]+tr*1.1,B0[1]-tr*.2,u,pl.rep?'#7ad7ff':'#ffe066',isCur?ease((p-.55)/.3):1);
+  mid=pts[15];if(isCur)pill(c,mid[0],mid[1]-16*u,(pl.rep?'timeout':'flag')+' · ICMP x'+pl.n,COL.flag,u,{W,H});
+  return null;}
+ /* pass / run */
+ const hasRead=!!pl.read,aud=hasRead?.16:0,hs=aud+.2;
+ if(hasRead&&pl.r2){const R0=P(pl.r2);const [a,b]=trim(A0,R0,tr,tr*1.4);const pts=arcPts(a,b,-.2);c.strokeStyle=COL.audible;c.fillStyle=COL.audible;c.lineWidth=1.8*u;c.setLineDash([5*u,5*u]);const pp=part(pts,ease(p/aud));strokeP(c,pp);c.setLineDash([]);if(p>aud*.7||!isCur)head(c,pp,7*u);if(isCur&&p<hs+.08)pill(c,pts[15][0],pts[15][1]-14*u,'audible · '+trunc(pl.read.name,26),COL.audible,u,{W,H});}
+ const [a,b]=trim(A0,B0,tr,tr*1.5);
+ if(pl.proto==='udp'||pl.kind==='run'&&!pl.hsClean&&pl.proto==='udp'){ // udp: straight run
+  const pts=[a,b];c.strokeStyle=col;c.fillStyle=col;c.lineWidth=lw;const pp=part(pts,ease(p/.9));strokeP(c,pp);head(c,pp,10*u);const o2=atU(pts,ease(p/.9));ball={p:o2.p,a:o2.a};mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  if(isCur&&p>.25)pill(c,mid[0],mid[1]-16*u,pl.short,col,u,{W,H});return ball;}
+ const fail=pl.res==='incomplete'||pl.res==='refused';
+ // snap (handshake)
+ const su=clamp((p-aud)/(hs-aud),0,1);
+ if(!isCur||su>0){c.strokeStyle=COL.snap;c.fillStyle=COL.snap;c.lineWidth=1.6*u;const full=fail?(pl.res==='incomplete'?.55:1):1;const sp=part([a,b],su*full);strokeP(c,sp);
+  if(isCur&&su<1){const e=sp[sp.length-1];c.beginPath();c.arc(e[0],e[1],3.4*u,0,7);c.fill();}
+  if(isCur&&su>0&&su<1)pill(c,(a[0]+b[0])/2,(a[1]+b[1])/2+17*u,'SYN · SYN-ACK · ACK',COL.snap,u,{W,H});}
+ if(fail){
+  const e=pl.res==='incomplete'?[a[0]+(b[0]-a[0])*.55,a[1]+(b[1]-a[1])*.55]:b;
+  if(p>hs-.02||!isCur){const k=isCur?ease((p-hs)/.2):1;c.strokeStyle=COL.bad;c.lineWidth=2.6*u;c.globalAlpha*=k;const q=6*u;c.beginPath();c.moveTo(e[0]-q,e[1]-q);c.lineTo(e[0]+q,e[1]+q);c.moveTo(e[0]+q,e[1]-q);c.lineTo(e[0]-q,e[1]+q);c.stroke();c.globalAlpha=1;
+   if(isCur&&p>hs+.05)pill(c,e[0],e[1]-18*u,pl.res==='incomplete'?'no reply · incomplete':'RST · refused',COL.bad,u,{W,H});}
+  return null;}
+ const pts=arcPts(a,b,pl.kind==='run'?.05:.2);
+ const pu=ease((p-hs)/(1-hs));
+ if(p>hs||!isCur){c.strokeStyle=col;c.fillStyle=col;c.lineWidth=lw;if(pl.kind==='pass'&&isCur){c.setLineDash([9*u,6*u]);}
+  const pp=part(pts,isCur?pu:1);strokeP(c,pp);c.setLineDash([]);head(c,pp,Math.max(8,lw*1.9));
+  const o2=atU(pts,isCur?pu:1);ball={p:o2.p,a:o2.a};
+  mid=pts[15];
+  if(isCur&&pu>.25)pill(c,mid[0],mid[1]-(pl.kind==='run'?16:20)*u,pl.short,col,u,{W,H});
+  if(pl.res==='fumble'&&(pu>.72||!isCur)){const q=atU(pts,.72).p;c.strokeStyle=COL.bad;c.lineWidth=2.4*u;for(let k=0;k<8;k++){const an=k*Math.PI/4;c.beginPath();c.moveTo(q[0]+Math.cos(an)*6*u,q[1]+Math.sin(an)*6*u);c.lineTo(q[0]+Math.cos(an)*13*u,q[1]+Math.sin(an)*13*u);c.stroke();}if(isCur&&pu>.8)pill(c,q[0],q[1]+20*u,'FUMBLE',COL.bad,u,{W,H});}
+  else if(pl.retr&&(pu>.6||!isCur)){const q=atU(pts,.6).p;flag(c,q[0],q[1],u,'#ffe066',1);}
+ }
+ return ball;}
+
+/* ============================ UI ============================ */
+const LGD=[
+ ['The QB','Client / most active host','The busiest initiator in the capture. Everything runs from the line of scrimmage.','#34e3b0','qb'],
+ ['Pre-snap read','DNS lookup','The audible at the line: ask the resolver where to throw.','#b9afff','dns'],
+ ['The snap','TCP SYN, SYN-ACK, ACK','Three quick touches and the ball is live. Slow or missing means trouble.','#22d3ee','snap'],
+ ['The pass / run','TLS or HTTP data','Long arrows. Yardage is bytes on a log scale: thicker route, more data.','#34e3b0','pass'],
+ ['Fumble / incomplete','Retransmits, resets','Dropped balls, slammed doors and unanswered snaps turn the ball over.','#ff8b96','fumble'],
+ ['The blitz','Port scan','Many rushers, one quarterback. Dozens of ports knocked on, most refused.','#ff5d73','blitz'],
+ ['Hurry-up offense','Beaconing','The same play, same spacing, no huddle. Machine-regular check-ins.','#ffb86b','beacon'],
+ ['The trick play','DNS tunnelling, big outbound','A handoff in disguise: long odd DNS names or a heave far bigger than what came back.','#ff7ab8','trick'],
+ ['The flag','ICMP','Pings and errors. A timeout is the clock stopping with no reply.','#ffe066','flag']
+];
+function glyph(k,col){const s='stroke="'+col+'" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"';
+ const G={
+  qb:'<circle cx="27" cy="20" r="11" fill="'+col+'" stroke="none"/><text x="27" y="24" text-anchor="middle" font-family="Space Grotesk,sans-serif" font-weight="700" font-size="11" fill="#06140f">QB</text>',
+  dns:'<path d="M5 28Q20 4 44 14" '+s+' stroke-dasharray="5 5"/><path d="M38 8l7 6-9 3" '+s+'/>',
+  snap:'<path d="M5 20H44" '+s+'/><circle cx="14" cy="20" r="2.6" fill="'+col+'"/><circle cx="25" cy="20" r="2.6" fill="'+col+'"/><circle cx="36" cy="20" r="2.6" fill="'+col+'"/>',
+  pass:'<path d="M4 30Q22 0 46 18" '+s+' stroke-width="4"/><path d="M39 10l8 8-11 3" '+s+'/>',
+  fumble:'<path d="M5 30Q18 8 32 20" '+s+'/><path d="M33 8v8M33 24v8M25 20h-8M41 20h8M27 14l-5-5M39 26l5 5M39 14l5-5M27 26l-5 5" '+s+' stroke-width="2"/>',
+  blitz:'<path d="M4 8L40 18M4 18L40 20M4 28L40 22M4 36L40 24" '+s+' stroke-width="2.2"/><path d="M34 14l8 5-8 6" '+s+' stroke-width="2.4"/>',
+  beacon:'<path d="M4 24Q24 8 46 22" '+s+' stroke-dasharray="6 5"/><path d="M14 10v8M25 8v8M36 12v8" '+s+' stroke-width="3"/>',
+  trick:'<path d="M4 22l7-8 7 16 7-16 7 16 7-8 4 0" '+s+'/><path d="M42 16l6 6-7 4" '+s+'/>',
+  flag:'<path d="M18 36V6" '+s+'/><path d="M18 7l22 7-22 9z" fill="'+col+'" stroke="none"/>'};
+ return '<svg viewBox="0 0 52 40" aria-hidden="true">'+G[k]+'</svg>';}
+(function buildLegend(){const g=$('lgrid');for(const [t,n,d,c,k] of LGD){const it=el('div','glass it');it.style.setProperty('--k',c);it.innerHTML=glyph(k,c);it.append(el('b',null,t+' · '+n),el('p',null,d));g.append(it);}
+ const key=$('key');for(const [t,col,dashed] of [['snap',COL.snap],['pass / run',COL.pass,1],['pre-snap read',COL.audible,1],['fumble / incomplete',COL.bad],['blitz',COL.blitz],['hurry-up',COL.beacon,1],['trick play',COL.trick],['flag',COL.flag,1]]){const s=el('span');const i=el('i',dashed?'d':'');i.style.setProperty('--k',col);s.append(i,t);key.append(s);}})();
+
+const listEl=$('plist');let liEls=[];
+function renderModel(){
+ const m=S.m;
+ $('title').textContent=m.label;
+ $('chipSim').hidden=!m.synthetic;
+ $('chipFmt').textContent=(m.fmt?m.fmt+' · ':'')+fmtN(m.packets)+' packets';
+ const v=m.verdict,call=$('call');call.style.setProperty('--tone',v.tone==='r'?'#ff7b86':v.tone==='a'?'#ffb86b':'#34e3b0');
+ call.innerHTML='';call.append(el('div','eb','Coach’s call'));
+ const i=call.querySelector('.eb');i.prepend(el('i'));
+ call.append(el('h3',null,v.title),el('p',null,v.detail));
+ if(v.also.length){const a=el('div','also');for(const [t,x] of v.also)a.append(el('span','chip '+(t==='r'?'r':'a'),x));call.append(a);}
+ const sc=$('score');sc.innerHTML='';
+ const stat=(b,s)=>{const d=el('div','stat');d.append(el('b',null,b),el('span',null,s));sc.append(d);};
+ stat(fmtN(m.packets),'packets');stat(fmtB(m.bytes),'bytes');stat(fmtD(m.dur),'duration');stat(fmtN(m.nHosts),'hosts');
+ stat(String(m.plays.length),'plays');stat(String(m.flags),'flags');stat(String(m.turnovers),'turnovers');stat(m.score?String(m.score):'0','points');
+ const mv=el('div','mvp');mv.append(el('b',null,'MVP'),el('span',null,m.mvp.ip+(m.mvp.name?' · '+m.mvp.name:'')),el('em',null,fmtB(m.mvp.bytes)));sc.append(mv);
+ listEl.innerHTML='';liEls=[];
+ m.plays.forEach((pl,i)=>{const li=el('li');const b=el('button','pl');b.type='button';b.style.setProperty('--kc',colOf(pl));
+  const mt=el('div','m');const dn=el('span','dn',pl.lab);mt.append(dn,el('span',null,fmtRel(pl.t0-m.t0)),el('span',null,pl.kind==='audible'?'pre-snap':pl.call||''));
+  b.append(el('span','n',String(i+1)),mt,el('div','tx',pl.text));b.addEventListener('click',()=>{S.playing=false;seekPlay(i);});li.append(b);listEl.append(li);liEls.push(b);});
+ const note=m.dropped>0||m.skipped>0||m.warnings.length;
+ let msg='';if(m.dropped>0)msg+='Showing the '+m.plays.length+' biggest plays; '+m.dropped+' smaller ones are not drawn. ';if(m.warnings.length)msg+=m.warnings.join(' ');
+ $('msg').textContent=msg;
+ S.f=0;S.cur=-1;setPlaying(false);syncUI();S.dirty=true;
+}
+function curIndex(f){const m=S.m;let c=-1;for(let i=0;i<m.plays.length;i++)if(f>=m.plays[i].s0)c=i;return c;}
+function syncUI(){
+ const m=S.m;if(!m)return;
+ const c=curIndex(S.f);
+ $('scr').value=Math.round(S.f/m.T*1000);$('scr').style.setProperty('--pct',(S.f/m.T*100)+'%');
+ const pl=c>=0?m.plays[c]:null;
+ $('clkA').textContent=fmtRel(pl?pl.t0-m.t0+(S.f-pl.s0)/pl.len*Math.max(0,(pl.t1-pl.t0)):0);
+ $('clkB').textContent='play '+(c+1)+' / '+m.plays.length;
+ if(c!==S.cur){S.cur=c;liEls.forEach((b,i)=>{b.classList.toggle('cur',i===c);b.classList.toggle('fut',i>c);if(i===c)b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');});
+  if(c>=0&&liEls[c]){const ol=listEl,b=liEls[c].parentNode;const top=b.offsetTop-ol.offsetTop-8;if(top<ol.scrollTop||top+b.offsetHeight>ol.scrollTop+ol.clientHeight-8)ol.scrollTo({top:Math.max(0,top-ol.clientHeight/3),behavior:RMQ.matches?'auto':'smooth'});}
+  fieldEl.setAttribute('aria-label','Whiteboard. '+(pl?pl.text:'Press play to run the play.')+' Coach’s call: '+m.verdict.title+'.');}
+}
+function setPlaying(v){S.playing=v;const b=$('bPlay');b.setAttribute('aria-label',v?'Pause':'Play');$('icPlay').innerHTML=v?'<path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z"/>':'<path d="M7 4.5v15l13-7.5z"/>';}
+function seek(f){if(!S.m)return;S.f=clamp(f,0,S.m.T);S.dirty=true;syncUI();}
+function seekPlay(i){const m=S.m;i=clamp(i,0,m.plays.length-1);seek(m.plays[i].s0+m.plays[i].len*.62);}
+function stepPlay(d){const m=S.m;S.playing=false;setPlaying(false);const c=curIndex(S.f);
+ if(d>0){const n=c+1;if(n>=m.plays.length)seek(m.T);else seek(m.plays[n].s0+m.plays[n].len*.62);}
+ else{const pl=c>=0?m.plays[c]:null;if(pl&&S.f-pl.s0>pl.len*.7&&c>=0&&S.f<m.T){seek(pl.s0+pl.len*.62-.0001);if(c===0)return;}if(c<=0){seek(0);return;}seek(m.plays[c-1].s0+m.plays[c-1].len*.62);}}
+$('bPlay').addEventListener('click',()=>{const m=S.m;if(!m)return;if(!S.playing&&S.f>=m.T-.01)S.f=0;setPlaying(!S.playing);S.last=0;});
+$('bPrev').addEventListener('click',()=>stepPlay(-1));
+$('bNext').addEventListener('click',()=>stepPlay(1));
+$('scr').addEventListener('input',e=>{S.playing=false;setPlaying(false);seek(+e.target.value/1000*S.m.T);});
+$('spd').addEventListener('change',e=>{S.speed=+e.target.value;});
+fieldEl.addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();$('bPlay').click();}else if(e.key==='ArrowRight'){e.preventDefault();stepPlay(1);}else if(e.key==='ArrowLeft'){e.preventDefault();stepPlay(-1);}});
+fieldEl.addEventListener('click',()=>{fieldEl.focus({preventScroll:true});});
+
+function resize(){const r=fieldEl.getBoundingClientRect();if(!r.width)return;const dpr=Math.min(window.devicePixelRatio||1,2);S.W=r.width;S.H=r.height;S.dpr=dpr;S.vert=r.width<r.height*1.1;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);S.dirty=true;}
+if(window.ResizeObserver)new ResizeObserver(resize).observe(fieldEl);window.addEventListener('resize',resize);
+function frame(now){requestAnimationFrame(frame);
+ const m=S.m;if(!m||!S.W)return;
+ if(S.playing){const dt=S.last?Math.min(.1,(now-S.last)/1000):0;S.last=now;S.f+=dt*S.speed/1.25;if(S.f>=m.T){S.f=m.T;setPlaying(false);}S.dirty=true;syncUI();}
+ else S.last=0;
+ if(S.dirty){S.dirty=false;cx.setTransform(S.dpr,0,0,S.dpr,0,0);cx.clearRect(0,0,S.W,S.H);drawBoard(cx,S.W,S.H,S.f,{vert:S.vert});}
+}
+requestAnimationFrame(frame);
+
+/* ----- loading ----- */
+function toast(t,ms){const e=$('toast');e.textContent=t;e.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>{e.hidden=true;},ms||2600);}
+function showError(t){$('msg').textContent=t;}
+function loadPackets(res,label,synthetic){
+ if(res.error){showError(res.error);return false;}
+ const m=PG.analyze(res.packets,{label,synthetic,fmt:res.format,skipped:res.skipped,warnings:res.warnings});
+ if(!m){showError('I found packets but nothing I could draw as a play (no TCP, UDP, DNS or ICMP traffic between hosts).');return false;}
+ S.m=m;renderModel();resize();
+ if(!RMQ.matches&&synthetic&&!loadPackets.first){}
+ return true;}
+function loadSample(id,play){const sm=SAMPLES.find(x=>x.id===id);const bytes=sm.gen();const res=PG.parse(bytes);
+ if(loadPackets(res,sm.title,true)){document.querySelectorAll('#samples .btn').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.id===id)));
+  if(play&&!RMQ.matches){S.f=0;setPlaying(true);}else if(RMQ.matches){seek(S.m.T);}}}
+async function openFile(file){
+ if(!file)return;
+ if(file.size>250*1048576){showError('That file is over 250 MB. Trim it first, for example: tcpdump -r big.pcap -c 300000 -w small.pcap');return;}
+ try{const buf=await file.arrayBuffer();const res=PG.parse(new Uint8Array(buf));
+  if(loadPackets(res,file.name,false)){document.querySelectorAll('#samples .btn').forEach(b=>b.setAttribute('aria-pressed','false'));if(!RMQ.matches){S.f=0;setPlaying(true);}else seek(S.m.T);toast('Loaded '+file.name+' locally');location.hash==='#board'||document.getElementById('board').scrollIntoView({behavior:RMQ.matches?'auto':'smooth',block:'start'});}}
+ catch(e){showError('I could not read that file.');}}
+const sw=$('samples');for(const sm of SAMPLES){const b=el('button','btn sm',sm.label);b.type='button';b.dataset.id=sm.id;b.setAttribute('aria-pressed','false');b.addEventListener('click',()=>loadSample(sm.id,true));sw.append(b);}
+$('bOpen').addEventListener('click',()=>$('file').click());
+$('file').addEventListener('change',e=>{openFile(e.target.files[0]);e.target.value='';});
+const drop=$('drop');
+['dragenter','dragover'].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();if(ev==='drop'||e.target===document.documentElement||!e.relatedTarget)drop.classList.remove('over');}));
+window.addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)openFile(f);});
+
+/* ----- poster export ----- */
+function wrap(c,text,x,y,maxW,lh,maxLines){const w=text.split(' ');let line='',n=0;for(const word of w){const t=line?line+' '+word:word;if(c.measureText(t).width>maxW&&line){c.fillText(line,x,y);y+=lh;line=word;if(++n>=maxLines-1){}}else line=t;}c.fillText(line,x,y);return y+lh;}
+function renderPoster(){
+ const m=S.m,W=1600,H=1000,pc=document.createElement('canvas');pc.width=W;pc.height=H;const c=pc.getContext('2d');
+ const bg=c.createRadialGradient(W*.5,-100,50,W*.5,200,1300);bg.addColorStop(0,'#14173a');bg.addColorStop(1,'#06070c');c.fillStyle=bg;c.fillRect(0,0,W,H);
+ for(const [x,y,col] of [[120,90,'rgba(255,212,94,.10)'],[1500,150,'rgba(34,211,238,.12)'],[1380,980,'rgba(52,227,176,.12)'],[80,980,'rgba(157,140,255,.12)']]){const g=c.createRadialGradient(x,y,0,x,y,520);g.addColorStop(0,col);g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.fillRect(0,0,W,H);}
+ c.textBaseline='alphabetic';c.textAlign='left';
+ c.fillStyle='#ffd45e';c.font='700 15px Inter,system-ui,sans-serif';c.fillText('PACKET PLAYBOOK  ·  THE PLAY, DRAWN',60,62);
+ c.fillStyle='#f2f4fa';c.font='700 44px "Space Grotesk",system-ui,sans-serif';c.fillText(trunc(m.label,46),60,112);
+ if(m.synthetic){c.font='600 14px Inter,system-ui,sans-serif';const t='FICTIONAL SAMPLE',tw=c.measureText(t).width+24;c.strokeStyle='#ffd45e';c.lineWidth=1.5;c.beginPath();c.roundRect(W-60-tw,54,tw,34,17);c.stroke();c.fillStyle='#ffd45e';c.fillText(t,W-60-tw+12,76);}
+ const fx=60,fy=140,fw=1480,fh=640;
+ c.save();c.translate(fx,fy);c.beginPath();c.roundRect(0,0,fw,fh,20);c.clip();
+ const f=S.f<.05?m.T:S.f;drawBoard(c,fw,fh,f,{vert:false,u:1.6,doneAlpha:.55});c.restore();
+ /* bottom */
+ const v=m.verdict,tc=v.tone==='r'?'#ff7b86':v.tone==='a'?'#ffb86b':'#34e3b0';
+ c.fillStyle='rgba(255,255,255,.05)';c.strokeStyle='rgba(255,255,255,.14)';c.lineWidth=1.2;c.beginPath();c.roundRect(60,800,900,150,18);c.fill();c.stroke();c.fillStyle=tc;c.fillRect(60,818,5,114);
+ c.fillStyle='#a9b3cb';c.font='700 13px Inter,system-ui,sans-serif';c.fillText('COACH’S CALL',86,832);
+ c.fillStyle='#fff';c.font='700 30px "Space Grotesk",system-ui,sans-serif';c.fillText(trunc(v.title,54),86,868);
+ c.fillStyle='#cdd6ea';c.font='400 15px Inter,system-ui,sans-serif';wrap(c,v.detail,86,894,850,21,3);
+ const stats=[[fmtN(m.packets),'PACKETS'],[fmtB(m.bytes),'BYTES'],[fmtD(m.dur),'DURATION'],[fmtN(m.nHosts),'HOSTS'],[String(m.plays.length),'PLAYS'],[String(m.flags),'FLAGS']];
+ stats.forEach((s,i)=>{const x=1000+(i%3)*182,y=830+Math.floor(i/3)*62;c.fillStyle='#fff';c.font='700 28px "Space Grotesk",system-ui,sans-serif';c.fillText(s[0],x,y);c.fillStyle='#a9b3cb';c.font='600 11px Inter,system-ui,sans-serif';c.fillText(s[1],x,y+18);});
+ c.fillStyle='#ffd45e';c.font='700 12px Inter,system-ui,sans-serif';c.fillText('MVP',1000,950);c.fillStyle='#e8eefc';c.font='500 14px ui-monospace,Menlo,Consolas,monospace';c.fillText(trunc(m.mvp.ip+(m.mvp.name?' '+m.mvp.name:''),34)+'  '+fmtB(m.mvp.bytes),1038,950);
+ c.fillStyle='#8791ad';c.font='500 12px Inter,system-ui,sans-serif';c.textAlign='right';c.fillText('Made in the browser. The capture never left this tab.',W-60,982);c.textAlign='left';
+ c.fillText('Built by Gustavo Freitas',60,982);
+ return pc;}
+$('bExp').addEventListener('click',()=>{if(!S.m)return;const pc=renderPoster();pc.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='packet-playbook-'+S.m.label.replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase().slice(0,40)+'.png';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast('Poster saved');},'image/png');});
+
+window.PP={S,PG,SAMPLES,seek,renderPoster,loadSample,openFile,drawBoard,setPlaying};
+/* boot */
+function boot(){resize();loadSample('web',false);
+ if(RMQ.matches)seek(S.m.T);else{setPlaying(true);}}
+(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(()=>{boot();});
+setTimeout(()=>{if(!S.m)boot();},2500);
+})();
+</script>
+</body>
+</html>
